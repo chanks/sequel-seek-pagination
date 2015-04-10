@@ -17,12 +17,12 @@ describe Sequel::SeekPagination do
 
     datasets.each do |dataset|
       result = dataset.seek_paginate(30).all
-      result.should == (1..30).map{|i| {id: i}}
+      result.map{|r| r[:id]}.should == (1..30).to_a
     end
 
     # Then in reverse:
     result = DB[:seek].order(Sequel.desc(:id)).seek_paginate(30).all
-    result.should == (9971..10000).map{|i| {id: i}}.reverse
+    result.map{|r| r[:id]}.should == (971..1000).to_a.reverse
   end
 
   it "should page properly when given a starting point" do
@@ -35,11 +35,11 @@ describe Sequel::SeekPagination do
 
     datasets.each do |dataset|
       result = dataset.seek_paginate(30, after: 79).all
-      result.should == (80..109).map{|i| {id: i}}
+      result.map{|r| r[:id]}.should == (80..109).to_a
     end
 
     # Then in reverse:
     result = DB[:seek].order(Sequel.desc(:id)).seek_paginate(30, after: 789).all
-    result.should == (759..788).map{|i| {id: i}}.reverse
+    result.map{|r| r[:id]}.should == (759..788).to_a.reverse
   end
 end
