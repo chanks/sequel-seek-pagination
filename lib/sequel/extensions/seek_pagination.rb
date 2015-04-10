@@ -3,11 +3,19 @@ require 'sequel/extensions/seek_pagination/version'
 
 module Sequel
   module SeekPagination
+    class Error < StandardError; end
+
     def seek_paginate(count, after: nil)
+      order = opts[:order]
+
+      if order.nil? || order.length.zero?
+        raise Error, "cannot seek paginate on a dataset with no order"
+      end
+
       ds = limit(count)
 
       if after
-        column, direction = parse_column_and_direction(opts[:order].first)
+        column, direction = parse_column_and_direction(order.first)
 
         case direction
         when :asc  then ds.where{|r| r.>(r.__send__(column), after)}

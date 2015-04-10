@@ -1,6 +1,12 @@
 require 'spec_helper'
 
 describe Sequel::SeekPagination do
+  it "should raise an error if the dataset is not ordered" do
+    proc {
+      DB[:seek].seek_paginate(30)
+    }.should raise_error Sequel::SeekPagination::Error, /cannot seek paginate on a dataset with no order/
+  end
+
   it "should limit the dataset appropriately when a starting point is not given" do
     datasets = [
       DB[:seek].order(:id),
