@@ -41,15 +41,15 @@ module Sequel
           first_col, first_value = sets[0]
           last_col = sets[-1][0]
 
-          ds = dataset.where(ineq(first_col.direction, first_col.name, first_value, eq: first_col != last_col))
+          ds = dataset.where(ineq(first_col, first_value, eq: first_col != last_col))
 
           sets.each_cons(2) do |(col_a, col_a_value), (col_b, col_b_value)|
             ds = ds.where do |o|
               Sequel.|(
-                ineq(col_a.direction, col_a.name, col_a_value, eq: false),
+                ineq(col_a, col_a_value, eq: false),
                 Sequel.&(
                   {col_a.name => col_a_value},
-                  ineq(col_b.direction, col_b.name, col_b_value, eq: col_b != last_col)
+                  ineq(col_b, col_b_value, eq: col_b != last_col)
                 )
               )
             end
@@ -60,9 +60,9 @@ module Sequel
 
         private
 
-        def ineq(direction, name, value, eq: true)
-          method = "#{direction == :asc ? '>' : '<'}#{'=' if eq}"
-          Sequel.virtual_row { |o| o.__send__(method, name, value) }
+        def ineq(column, value, eq: true)
+          method = "#{column.direction == :asc ? '>' : '<'}#{'=' if eq}"
+          Sequel.virtual_row { |o| o.__send__(method, column.name, value) }
         end
       end
     end
