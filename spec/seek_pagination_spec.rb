@@ -161,4 +161,28 @@ describe Sequel::SeekPagination do
       result.should == DB[:seek].order(Sequel.desc(:non_nullable_1), Sequel.desc(:non_nullable_2), Sequel.desc(:pk)).offset(57).limit(5).all
     end
   end
+
+  describe "when ordering by two columns, the first of which is nullable" do
+    it "should page properly from a starting point"
+  end
+
+  describe "when ordering by three columns, the first two of which are nullable" do
+    it "should page properly from a starting point"
+  end
+
+  describe "when ordering by two columns in different directions" do
+    it "should page properly from a starting point"
+  end
+
+  describe "when ordering by three columns in different directions" do
+    it "should page properly from a starting point"
+  end
+
+  describe "when ordering by two columns with nulls first/last settings" do
+    it "should page properly from a starting point"
+  end
+
+  describe "when ordering by three columns with nulls first/last settings" do
+    it "should page properly from a starting point"
+  end
 end
