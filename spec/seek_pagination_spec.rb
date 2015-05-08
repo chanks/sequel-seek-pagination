@@ -198,6 +198,12 @@ describe Sequel::SeekPagination do
     it "should page properly from a starting point"
   end
 
+  describe "when ordering by nullable columns in multiple directions" do
+    it "should page properly from a starting point for two columns"
+
+    it "should page properly from a starting point for three columns"
+  end
+
   describe "when ordering by two columns with nulls first/last settings" do
     it "should page properly from a starting point"
   end
