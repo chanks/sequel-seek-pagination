@@ -43,12 +43,6 @@ describe Sequel::SeekPagination do
     }.should raise_error Sequel::SeekPagination::Error, /cannot seek paginate on a dataset with no order/
   end
 
-  it "should raise an error on a dataset with mixed ordering" do
-    proc {
-      DB[:seek].order(:non_nullable_1, Sequel.desc(:non_nullable_2)).seek_paginate(30)
-    }.should raise_error Sequel::SeekPagination::Error, /cannot seek paginate on a query ordering by multiple columns in different directions/
-  end
-
   describe "when ordering by a single, unique, non-null column" do
     it "should limit the dataset appropriately when a starting point is not given" do
       DB[:seek].order(:pk).seek_paginate(5).all.should == DB[:seek].order_by(:pk).limit(5).all
@@ -162,19 +156,45 @@ describe Sequel::SeekPagination do
     end
   end
 
+  describe "when ordering by two columns in different directions" do
+    it "should page properly when given a starting point" do
+      datasets = [
+        DB[:seek].order(:non_nullable_1, Sequel.desc(:pk)),
+        DB[:seek].order(Sequel.desc(:non_nullable_1), :pk)
+      ]
+
+      datasets.each do |ds|
+        pair = ds.offset(56).get([:non_nullable_1, :pk])
+        result = ds.seek_paginate(5, after: pair).all
+        result.should == ds.offset(57).limit(5).all
+      end
+    end
+  end
+
+  describe "when ordering by three columns in different directions" do
+    it "should page properly when given a starting point" do
+      datasets = [
+        DB[:seek].order(Sequel.desc(:non_nullable_1), :non_nullable_2, :pk),
+        DB[:seek].order(:non_nullable_1, Sequel.desc(:non_nullable_2), :pk),
+        DB[:seek].order(:non_nullable_1, :non_nullable_2, Sequel.desc(:pk)),
+        DB[:seek].order(:non_nullable_1, Sequel.desc(:non_nullable_2), Sequel.desc(:pk)),
+        DB[:seek].order(Sequel.desc(:non_nullable_1), :non_nullable_2, Sequel.desc(:pk)),
+        DB[:seek].order(Sequel.desc(:non_nullable_1), Sequel.desc(:non_nullable_2), :pk)
+      ]
+
+      datasets.each do |ds|
+        trio = ds.offset(56).get([:non_nullable_1, :non_nullable_2, :pk])
+        result = ds.seek_paginate(5, after: trio).all
+        result.should == ds.offset(57).limit(5).all
+      end
+    end
+  end
+
   describe "when ordering by two columns, the first of which is nullable" do
     it "should page properly from a starting point"
   end
 
   describe "when ordering by three columns, the first two of which are nullable" do
-    it "should page properly from a starting point"
-  end
-
-  describe "when ordering by two columns in different directions" do
-    it "should page properly from a starting point"
-  end
-
-  describe "when ordering by three columns in different directions" do
     it "should page properly from a starting point"
   end
 

@@ -14,14 +14,10 @@ module Sequel
 
       orders = order.map { |o| OrderedColumn.new(o) }
 
-      unless orders.map(&:direction).uniq.length == 1
-        raise Error, "cannot seek paginate on a query ordering by multiple columns in different directions"
-      end
-
       ds = limit(count)
 
       if after
-        OrderedColumn.apply(ds, orders.first.direction, orders.zip([*after]))
+        OrderedColumn.apply(ds, orders.zip([*after]))
       else
         ds
       end
@@ -41,19 +37,19 @@ module Sequel
       end
 
       class << self
-        def apply(dataset, direction, sets)
+        def apply(dataset, sets)
           first_col, first_value = sets[0]
           last_col = sets[-1][0]
 
-          ds = dataset.where(ineq(direction, first_col.name, first_value, eq: first_col != last_col))
+          ds = dataset.where(ineq(first_col.direction, first_col.name, first_value, eq: first_col != last_col))
 
           sets.each_cons(2) do |(col_a, col_a_value), (col_b, col_b_value)|
             ds = ds.where do |o|
               Sequel.|(
-                ineq(direction, col_a.name, col_a_value, eq: false),
+                ineq(col_a.direction, col_a.name, col_a_value, eq: false),
                 Sequel.&(
                   {col_a.name => col_a_value},
-                  ineq(direction, col_b.name, col_b_value, eq: col_b != last_col)
+                  ineq(col_b.direction, col_b.name, col_b_value, eq: col_b != last_col)
                 )
               )
             end
