@@ -12,22 +12,16 @@ module Sequel
         raise Error, "cannot seek paginate on a dataset with no order"
       end
 
-      orders     = order.map { |o| parse_column_and_direction(o) }
-      columns    = orders.map{|o| o[0]}
-      directions = orders.map{|o| o[1]}.uniq
+      orders = order.map { |o| OrderedColumn.new(o) }
 
-      unless directions.length == 1
+      unless orders.map(&:direction).uniq.length == 1
         raise Error, "cannot seek paginate on a query ordering by multiple columns in different directions"
       end
 
       ds = limit(count)
 
       if after
-        case directions.first
-        when :asc  then ds.where{|r| r.>(columns, after)}
-        when :desc then ds.where{|r| r.<(columns, after)}
-        else raise "Bad direction!: #{direction.inspect}"
-        end
+        OrderedColumn.apply(ds, orders.first.direction, orders.zip([*after]))
       else
         ds
       end
@@ -35,11 +29,45 @@ module Sequel
 
     private
 
-    def parse_column_and_direction(order)
-      case order
-      when Symbol                         then [order, :asc]
-      when Sequel::SQL::OrderedExpression then [order.expression, order.descending ? :desc : :asc]
-      else raise "Unrecognized order!: #{order.inspect}"
+    class OrderedColumn
+      attr_reader :name, :direction
+
+      def initialize(order)
+        @name, @direction = case order
+                            when Symbol                         then [order, :asc]
+                            when Sequel::SQL::OrderedExpression then [order.expression, order.descending ? :desc : :asc]
+                            else raise "Unrecognized order!: #{order.inspect}"
+                            end
+      end
+
+      class << self
+        def apply(dataset, direction, sets)
+          first_col, first_value = sets[0]
+          last_col = sets[-1][0]
+
+          ds = dataset.where(ineq(direction, first_col.name, first_value, eq: first_col != last_col))
+
+          sets.each_cons(2) do |(col_a, col_a_value), (col_b, col_b_value)|
+            ds = ds.where do |o|
+              Sequel.|(
+                ineq(direction, col_a.name, col_a_value, eq: false),
+                Sequel.&(
+                  {col_a.name => col_a_value},
+                  ineq(direction, col_b.name, col_b_value, eq: col_b != last_col)
+                )
+              )
+            end
+          end
+
+          ds
+        end
+
+        private
+
+        def ineq(direction, name, value, eq: true)
+          method = "#{direction == :asc ? '>' : '<'}#{'=' if eq}"
+          Sequel.virtual_row { |o| o.__send__(method, name, value) }
+        end
       end
     end
   end
