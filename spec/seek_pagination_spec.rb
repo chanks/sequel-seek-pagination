@@ -51,6 +51,32 @@ describe Sequel::SeekPagination do
 
   describe "when ordering by a single, unique, non-null column" do
     it "should limit the dataset appropriately when a starting point is not given" do
+      DB[:seek].order(:pk).seek_paginate(5).all.should == DB[:seek].order_by(:pk).limit(5).all
+
+      # Then in reverse:
+      DB[:seek].order(Sequel.desc(:pk)).seek_paginate(5).all.should == DB[:seek].order_by(Sequel.desc(:pk)).limit(5).all
+    end
+
+    it "should page properly when given a starting point" do
+      pk = DB[:seek].order(:pk).offset(56).get(:pk)
+
+      result = DB[:seek].order(:pk).seek_paginate(5, after: pk).all
+      result.should == DB[:seek].order(:pk).offset(57).limit(5).all
+
+      result = DB[:seek].order(:pk).seek_paginate(5, after: [pk]).all
+      result.should == DB[:seek].order(:pk).offset(57).limit(5).all
+
+      # Then in reverse:
+      pk = DB[:seek].order(Sequel.desc(:pk)).offset(56).get(:pk)
+
+      result = DB[:seek].order(Sequel.desc(:pk)).seek_paginate(5, after: pk).all
+      result.should == DB[:seek].order(Sequel.desc(:pk)).offset(57).limit(5).all
+
+      result = DB[:seek].order(Sequel.desc(:pk)).seek_paginate(5, after: [pk]).all
+      result.should == DB[:seek].order(Sequel.desc(:pk)).offset(57).limit(5).all
+    end
+
+    it "should accept whatever type of order clause is there" do
       datasets = [
         DB[:seek].order(:pk),
         DB[:seek].order(:seek__pk),
@@ -65,17 +91,8 @@ describe Sequel::SeekPagination do
 
       # Then in reverse:
       DB[:seek].order(Sequel.desc(:pk)).seek_paginate(5).all.should == DB[:seek].order_by(Sequel.desc(:pk)).limit(5).all
-    end
 
-    it "should page properly when given a starting point" do
-      datasets = [
-        DB[:seek].order(:pk),
-        DB[:seek].order(:seek__pk),
-        DB[:seek].order(Sequel.asc(:pk)),
-        DB[:seek].order(Sequel.asc(:seek__pk)),
-        DB[:seek].order(Sequel.desc(:pk)).reverse_order
-      ]
-
+      # With starting points:
       datasets.each do |dataset|
         pk = DB[:seek].order(:pk).offset(56).get(:pk)
 
@@ -99,18 +116,8 @@ describe Sequel::SeekPagination do
 
   describe "when ordering by two unique columns, ordered in the same direction" do
     it "should limit the dataset appropriately when a starting point is not given" do
-      datasets = [
-        DB[:seek].order(:non_nullable_1, :pk),
-        DB[:seek].order(:seek__non_nullable_1, :seek__pk),
-        DB[:seek].order(Sequel.asc(:non_nullable_1), Sequel.asc(:pk)),
-        DB[:seek].order(Sequel.asc(:seek__non_nullable_1), Sequel.asc(:seek__pk)),
-        DB[:seek].order(Sequel.desc(:seek__non_nullable_1), Sequel.desc(:seek__pk)).reverse_order
-      ]
-
-      datasets.each do |dataset|
-        result = dataset.seek_paginate(5).all
-        result.should == DB[:seek].order(:non_nullable_1, :pk).limit(5).all
-      end
+      result = DB[:seek].order(:non_nullable_1, :pk).seek_paginate(5).all
+      result.should == DB[:seek].order(:non_nullable_1, :pk).limit(5).all
 
       # Then in reverse:
       results = DB[:seek].order(Sequel.desc(:seek__non_nullable_1), Sequel.desc(:seek__pk)).seek_paginate(5).all
@@ -118,20 +125,10 @@ describe Sequel::SeekPagination do
     end
 
     it "should page properly when given a starting point" do
-      datasets = [
-        DB[:seek].order(:non_nullable_1, :pk),
-        DB[:seek].order(:seek__non_nullable_1, :seek__pk),
-        DB[:seek].order(Sequel.asc(:non_nullable_1), Sequel.asc(:pk)),
-        DB[:seek].order(Sequel.asc(:seek__non_nullable_1), Sequel.asc(:seek__pk)),
-        DB[:seek].order(Sequel.desc(:seek__non_nullable_1), Sequel.desc(:seek__pk)).reverse_order
-      ]
+      pair = DB[:seek].order(:non_nullable_1, :pk).offset(56).get([:non_nullable_1, :pk])
 
-      datasets.each do |dataset|
-        pair = DB[:seek].order(:non_nullable_1, :pk).offset(56).get([:non_nullable_1, :pk])
-
-        result = dataset.seek_paginate(5, after: pair).all
-        result.should == DB[:seek].order(:non_nullable_1, :pk).offset(57).limit(5).all
-      end
+      result = DB[:seek].order(:non_nullable_1, :pk).seek_paginate(5, after: pair).all
+      result.should == DB[:seek].order(:non_nullable_1, :pk).offset(57).limit(5).all
 
       # Then in reverse:
       pair = DB[:seek].order(Sequel.desc(:non_nullable_1), Sequel.desc(:pk)).offset(56).get([:non_nullable_1, :pk])
@@ -143,18 +140,8 @@ describe Sequel::SeekPagination do
 
   describe "when ordering by three unique columns, ordered in the same direction" do
     it "should limit the dataset appropriately when a starting point is not given" do
-      datasets = [
-        DB[:seek].order(:non_nullable_1, :non_nullable_2, :pk),
-        DB[:seek].order(:seek__non_nullable_1, :seek__non_nullable_2, :seek__pk),
-        DB[:seek].order(Sequel.asc(:non_nullable_1), Sequel.asc(:non_nullable_2), Sequel.asc(:pk)),
-        DB[:seek].order(Sequel.asc(:seek__non_nullable_1), Sequel.asc(:seek__non_nullable_2), Sequel.asc(:seek__pk)),
-        DB[:seek].order(Sequel.desc(:seek__non_nullable_1), Sequel.desc(:seek__non_nullable_2), Sequel.desc(:seek__pk)).reverse_order
-      ]
-
-      datasets.each do |dataset|
-        result = dataset.seek_paginate(5).all
-        result.should == DB[:seek].order(:non_nullable_1, :non_nullable_2, :pk).limit(5).all
-      end
+      result = DB[:seek].order(:non_nullable_1, :non_nullable_2, :pk).seek_paginate(5).all
+      result.should == DB[:seek].order(:non_nullable_1, :non_nullable_2, :pk).limit(5).all
 
       # Then in reverse:
       results = DB[:seek].order(Sequel.desc(:seek__non_nullable_1), Sequel.desc(:seek__non_nullable_2), Sequel.desc(:seek__pk)).seek_paginate(5).all
@@ -162,20 +149,10 @@ describe Sequel::SeekPagination do
     end
 
     it "should page properly when given a starting point" do
-      datasets = [
-        DB[:seek].order(:non_nullable_1, :non_nullable_2, :pk),
-        DB[:seek].order(:seek__non_nullable_1, :seek__non_nullable_2, :seek__pk),
-        DB[:seek].order(Sequel.asc(:non_nullable_1), Sequel.asc(:non_nullable_2), Sequel.asc(:pk)),
-        DB[:seek].order(Sequel.asc(:seek__non_nullable_1), Sequel.asc(:seek__non_nullable_2), Sequel.asc(:seek__pk)),
-        DB[:seek].order(Sequel.desc(:seek__non_nullable_1), Sequel.desc(:non_nullable_2), Sequel.desc(:seek__pk)).reverse_order
-      ]
+      trio = DB[:seek].order(:non_nullable_1, :non_nullable_2, :pk).offset(56).get([:non_nullable_1, :non_nullable_2, :pk])
 
-      datasets.each do |dataset|
-        trio = DB[:seek].order(:non_nullable_1, :non_nullable_2, :pk).offset(56).get([:non_nullable_1, :non_nullable_2, :pk])
-
-        result = dataset.seek_paginate(5, after: trio).all
-        result.should == DB[:seek].order(:non_nullable_1, :non_nullable_2, :pk).offset(57).limit(5).all
-      end
+      result = DB[:seek].order(:non_nullable_1, :non_nullable_2, :pk).seek_paginate(5, after: trio).all
+      result.should == DB[:seek].order(:non_nullable_1, :non_nullable_2, :pk).offset(57).limit(5).all
 
       # Then in reverse:
       pair = DB[:seek].order(Sequel.desc(:non_nullable_1), Sequel.desc(:non_nullable_2), Sequel.desc(:pk)).offset(56).get([:non_nullable_1, :non_nullable_2, :pk])
