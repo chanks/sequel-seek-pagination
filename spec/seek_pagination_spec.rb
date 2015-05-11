@@ -43,7 +43,7 @@ describe Sequel::SeekPagination do
     }.should raise_error Sequel::SeekPagination::Error, /cannot seek paginate on a dataset with no order/
   end
 
-  describe "when ordering by a single, unique, non-null column" do
+  describe "when ordering by a single column" do
     it "should limit the dataset appropriately when a starting point is not given" do
       DB[:seek].order(:pk).seek_paginate(5).all.should == DB[:seek].order_by(:pk).limit(5).all
 
@@ -108,56 +108,58 @@ describe Sequel::SeekPagination do
     end
   end
 
-  describe "when ordering by two unique columns, ordered in the same direction" do
-    it "should limit the dataset appropriately when a starting point is not given" do
-      result = DB[:seek].order(:non_nullable_1, :pk).seek_paginate(5).all
-      result.should == DB[:seek].order(:non_nullable_1, :pk).limit(5).all
+  describe "when ordering by multiple columns" do
+    describe "by two columns" do
+      it "should limit the dataset appropriately when a starting point is not given" do
+        result = DB[:seek].order(:non_nullable_1, :pk).seek_paginate(5).all
+        result.should == DB[:seek].order(:non_nullable_1, :pk).limit(5).all
 
-      # Then in reverse:
-      results = DB[:seek].order(Sequel.desc(:seek__non_nullable_1), Sequel.desc(:seek__pk)).seek_paginate(5).all
-      results.should == DB[:seek].order(Sequel.desc(:non_nullable_1), Sequel.desc(:pk)).limit(5).all
+        # Then in reverse:
+        results = DB[:seek].order(Sequel.desc(:seek__non_nullable_1), Sequel.desc(:seek__pk)).seek_paginate(5).all
+        results.should == DB[:seek].order(Sequel.desc(:non_nullable_1), Sequel.desc(:pk)).limit(5).all
+      end
+
+      it "should page properly when given a starting point" do
+        pair = DB[:seek].order(:non_nullable_1, :pk).offset(56).get([:non_nullable_1, :pk])
+
+        result = DB[:seek].order(:non_nullable_1, :pk).seek_paginate(5, after: pair).all
+        result.should == DB[:seek].order(:non_nullable_1, :pk).offset(57).limit(5).all
+
+        # Then in reverse:
+        pair = DB[:seek].order(Sequel.desc(:non_nullable_1), Sequel.desc(:pk)).offset(56).get([:non_nullable_1, :pk])
+
+        result = DB[:seek].order(Sequel.desc(:non_nullable_1), Sequel.desc(:pk)).seek_paginate(5, after: pair).all
+        result.should == DB[:seek].order(Sequel.desc(:non_nullable_1), Sequel.desc(:pk)).offset(57).limit(5).all
+      end
     end
 
-    it "should page properly when given a starting point" do
-      pair = DB[:seek].order(:non_nullable_1, :pk).offset(56).get([:non_nullable_1, :pk])
+    describe "by three columns" do
+      it "should limit the dataset appropriately when a starting point is not given" do
+        result = DB[:seek].order(:non_nullable_1, :non_nullable_2, :pk).seek_paginate(5).all
+        result.should == DB[:seek].order(:non_nullable_1, :non_nullable_2, :pk).limit(5).all
 
-      result = DB[:seek].order(:non_nullable_1, :pk).seek_paginate(5, after: pair).all
-      result.should == DB[:seek].order(:non_nullable_1, :pk).offset(57).limit(5).all
+        # Then in reverse:
+        results = DB[:seek].order(Sequel.desc(:seek__non_nullable_1), Sequel.desc(:seek__non_nullable_2), Sequel.desc(:seek__pk)).seek_paginate(5).all
+        results.should == DB[:seek].order(Sequel.desc(:non_nullable_1), Sequel.desc(:non_nullable_2), Sequel.desc(:pk)).limit(5).all
+      end
 
-      # Then in reverse:
-      pair = DB[:seek].order(Sequel.desc(:non_nullable_1), Sequel.desc(:pk)).offset(56).get([:non_nullable_1, :pk])
+      it "should page properly when given a starting point" do
+        trio = DB[:seek].order(:non_nullable_1, :non_nullable_2, :pk).offset(56).get([:non_nullable_1, :non_nullable_2, :pk])
 
-      result = DB[:seek].order(Sequel.desc(:non_nullable_1), Sequel.desc(:pk)).seek_paginate(5, after: pair).all
-      result.should == DB[:seek].order(Sequel.desc(:non_nullable_1), Sequel.desc(:pk)).offset(57).limit(5).all
+        result = DB[:seek].order(:non_nullable_1, :non_nullable_2, :pk).seek_paginate(5, after: trio).all
+        result.should == DB[:seek].order(:non_nullable_1, :non_nullable_2, :pk).offset(57).limit(5).all
+
+        # Then in reverse:
+        pair = DB[:seek].order(Sequel.desc(:non_nullable_1), Sequel.desc(:non_nullable_2), Sequel.desc(:pk)).offset(56).get([:non_nullable_1, :non_nullable_2, :pk])
+
+        result = DB[:seek].order(Sequel.desc(:non_nullable_1), Sequel.desc(:non_nullable_2), Sequel.desc(:pk)).seek_paginate(5, after: pair).all
+        result.should == DB[:seek].order(Sequel.desc(:non_nullable_1), Sequel.desc(:non_nullable_2), Sequel.desc(:pk)).offset(57).limit(5).all
+      end
     end
   end
 
-  describe "when ordering by three unique columns, ordered in the same direction" do
-    it "should limit the dataset appropriately when a starting point is not given" do
-      result = DB[:seek].order(:non_nullable_1, :non_nullable_2, :pk).seek_paginate(5).all
-      result.should == DB[:seek].order(:non_nullable_1, :non_nullable_2, :pk).limit(5).all
-
-      # Then in reverse:
-      results = DB[:seek].order(Sequel.desc(:seek__non_nullable_1), Sequel.desc(:seek__non_nullable_2), Sequel.desc(:seek__pk)).seek_paginate(5).all
-      results.should == DB[:seek].order(Sequel.desc(:non_nullable_1), Sequel.desc(:non_nullable_2), Sequel.desc(:pk)).limit(5).all
-    end
-
-    it "should page properly when given a starting point" do
-      trio = DB[:seek].order(:non_nullable_1, :non_nullable_2, :pk).offset(56).get([:non_nullable_1, :non_nullable_2, :pk])
-
-      result = DB[:seek].order(:non_nullable_1, :non_nullable_2, :pk).seek_paginate(5, after: trio).all
-      result.should == DB[:seek].order(:non_nullable_1, :non_nullable_2, :pk).offset(57).limit(5).all
-
-      # Then in reverse:
-      pair = DB[:seek].order(Sequel.desc(:non_nullable_1), Sequel.desc(:non_nullable_2), Sequel.desc(:pk)).offset(56).get([:non_nullable_1, :non_nullable_2, :pk])
-
-      result = DB[:seek].order(Sequel.desc(:non_nullable_1), Sequel.desc(:non_nullable_2), Sequel.desc(:pk)).seek_paginate(5, after: pair).all
-      result.should == DB[:seek].order(Sequel.desc(:non_nullable_1), Sequel.desc(:non_nullable_2), Sequel.desc(:pk)).offset(57).limit(5).all
-    end
-  end
-
-  describe "when ordering by two columns in different directions" do
-    it "should page properly when given a starting point" do
+  describe "when ordering in different directions" do
+    it "by two columns should page properly when given a starting point" do
       datasets = [
         DB[:seek].order(:non_nullable_1, Sequel.desc(:pk)),
         DB[:seek].order(Sequel.desc(:non_nullable_1), :pk)
@@ -169,10 +171,8 @@ describe Sequel::SeekPagination do
         result.should == ds.offset(57).limit(5).all
       end
     end
-  end
 
-  describe "when ordering by three columns in different directions" do
-    it "should page properly when given a starting point" do
+    it "by three columns should page properly when given a starting point" do
       datasets = [
         DB[:seek].order(Sequel.desc(:non_nullable_1), :non_nullable_2, :pk),
         DB[:seek].order(:non_nullable_1, Sequel.desc(:non_nullable_2), :pk),
@@ -190,25 +190,31 @@ describe Sequel::SeekPagination do
     end
   end
 
-  describe "when ordering by two columns, the first of which is nullable" do
-    it "should page properly from a starting point"
+  describe "when ordering by nullable columns" do
+    describe "when ordering by two columns, the first of which is nullable" do
+      it "should page properly from a non-null starting point"
+
+      it "should page properly from a null starting point"
+    end
+
+    describe "when ordering by three columns, the first two of which are nullable" do
+      it "should page properly from a non-null starting point"
+
+      it "should page properly from a null starting point"
+    end
   end
 
-  describe "when ordering by three columns, the first two of which are nullable" do
-    it "should page properly from a starting point"
-  end
+  describe "when ordering with nulls first/last settings" do
+    describe "by two columns" do
+      it "should page properly from a non-null starting point"
 
-  describe "when ordering by nullable columns in multiple directions" do
-    it "should page properly from a starting point for two columns"
+      it "should page properly from a null starting point"
+    end
 
-    it "should page properly from a starting point for three columns"
-  end
+    describe "by three columns" do
+      it "should page properly from a non-null starting point"
 
-  describe "when ordering by two columns with nulls first/last settings" do
-    it "should page properly from a starting point"
-  end
-
-  describe "when ordering by three columns with nulls first/last settings" do
-    it "should page properly from a starting point"
+      it "should page properly from a null starting point"
+    end
   end
 end
