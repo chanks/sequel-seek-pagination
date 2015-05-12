@@ -38,24 +38,30 @@ module Sequel
 
       class << self
         def apply(dataset, sets)
-          first_col, first_value = sets[0]
-          last_col = sets[-1][0]
+          length = sets.length
 
-          ds = dataset.where(ineq(first_col, first_value, eq: first_col != last_col))
+          dataset.where(
+            Sequel.&(
+              *length.times.map { |i|
+                is_last = i == length - 1
+                conditions = sets[0..i]
 
-          sets.each_cons(2) do |(col_a, col_a_value), (col_b, col_b_value)|
-            ds = ds.where do |o|
-              Sequel.|(
-                ineq(col_a, col_a_value, eq: false),
-                Sequel.&(
-                  {col_a.name => col_a_value},
-                  ineq(col_b, col_b_value, eq: col_b != last_col)
-                )
-              )
-            end
-          end
+                if i.zero?
+                  col, value = conditions[0]
+                  ineq(col, value, eq: !is_last)
+                else
+                  c0, v0 = conditions[-2]
+                  c1, v1 = conditions[-1]
 
-          ds
+                  list = [Sequel.&({c0.name => v0}, ineq(c1, v1, eq: !is_last))]
+                  conditions[0..-2].each do |c, v|
+                    list << ineq(c, v, eq: false)
+                  end
+                  Sequel.|(*list)
+                end
+              }
+            )
+          )
         end
 
         private
