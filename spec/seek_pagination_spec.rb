@@ -1,6 +1,22 @@
 require 'spec_helper'
 
 describe Sequel::SeekPagination do
+  def random(max)
+    rand(max) + 1
+  end
+
+  def repopulate_seek(count = 1000)
+    DB.run <<-SQL
+      INSERT INTO seek
+        (non_nullable_1, non_nullable_2, nullable_1, nullable_2)
+      SELECT trunc(random() * 10 + 1),
+             trunc(random() * 10 + 1),
+             CASE WHEN random() > 0.5 THEN trunc(random() * 10 + 1) ELSE NULL END,
+             CASE WHEN random() > 0.5 THEN trunc(random() * 10 + 1) ELSE NULL END
+      FROM generate_series(1, #{count}) s
+    SQL
+  end
+
   before do
     DB.drop_table? :seek
 
@@ -12,29 +28,7 @@ describe Sequel::SeekPagination do
       integer :nullable_2
     end
 
-    def random(max)
-      rand(max) + 1
-    end
-
-    rows = []
-
-    [true, false].each do |nullable_1|
-      [true, false].each do |nullable_2|
-        250.times do
-          row = {
-            non_nullable_1: random(10),
-            non_nullable_2: random(10)
-          }
-
-          row[:nullable_1] = (random(10) if nullable_1)
-          row[:nullable_2] = (random(10) if nullable_2)
-
-          rows << row
-        end
-      end
-    end
-
-    DB[:seek].multi_insert(rows.shuffle)
+    repopulate_seek
   end
 
   it "should raise an error if the dataset is not ordered" do
@@ -220,25 +214,30 @@ describe Sequel::SeekPagination do
 
   describe "random testing" do
     it "should handle any permutation of accepted ordering criteria" do
-      100.times do |i|
+      3.times do |i|
+        DB[:seek].delete
+        repopulate_seek
+
         # Will add nullable columns when those are better supported.
         possible_columns = [:non_nullable_1, :non_nullable_2]
         columns = possible_columns.sample(random(possible_columns.count))
 
         all_columns = columns + [:pk]
 
-        offset = random(999)
+        10.times do
+          offset = random(999)
 
-        ordering = all_columns.map do |column|
-          rand < 0.5 ? Sequel.asc(column) : Sequel.desc(column)
+          ordering = all_columns.map do |column|
+            rand < 0.5 ? Sequel.asc(column) : Sequel.desc(column)
+          end
+
+          after = DB[:seek].order(*ordering).offset(offset).get(all_columns)
+
+          expected = DB[:seek].order(*ordering).offset(offset + 1).limit(10).all
+          actual   = DB[:seek].order(*ordering).seek_paginate(10, after: after).all
+
+          actual.should == expected
         end
-
-        after = DB[:seek].order(*ordering).offset(offset).get(all_columns)
-
-        expected = DB[:seek].order(*ordering).offset(offset + 1).limit(10).all
-        actual   = DB[:seek].order(*ordering).seek_paginate(10, after: after).all
-
-        actual.should == expected
       end
     end
   end
