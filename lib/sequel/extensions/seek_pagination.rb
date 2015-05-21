@@ -48,14 +48,18 @@ module Sequel
 
                 if i.zero?
                   col, value = conditions[0]
-                  ineq(col, value, eq: !is_last)
+                  ineq(col, value, eq: !is_last) || true
                 else
                   c0, v0 = conditions[-2]
                   c1, v1 = conditions[-1]
 
-                  list = [Sequel.&({c0.name => v0}, ineq(c1, v1, eq: !is_last))]
+                  filter = ineq(c1, v1, eq: !is_last)
+                  list = filter ? [Sequel.&({c0.name => v0}, filter)] : [{c0.name => v0}]
+
                   conditions[0..-2].each do |c, v|
-                    list << ineq(c, v, eq: false)
+                    if filter = ineq(c, v, eq: false)
+                      list << filter
+                    end
                   end
                   Sequel.|(*list)
                 end
@@ -67,8 +71,28 @@ module Sequel
         private
 
         def ineq(column, value, eq: true)
-          method = "#{column.direction == :asc ? '>' : '<'}#{'=' if eq}"
-          Sequel.virtual_row { |o| o.__send__(method, column.name, value) }
+          ascending = column.direction == :asc
+          value_is_null = value.nil?
+
+          method = "#{ascending ? '>' : '<'}#{'=' if eq}"
+
+          if ascending
+            if value_is_null
+              if eq
+                {column.name => nil}
+              end
+            else
+              Sequel.|(Sequel.virtual_row{|o| o.__send__(method, column.name, value)}, {column.name => nil})
+            end
+          else
+            if value_is_null
+              if !eq
+                Sequel.~({column.name => nil})
+              end
+            else
+              Sequel.virtual_row { |o| o.__send__(method, column.name, value) }
+            end
+          end
         end
       end
     end

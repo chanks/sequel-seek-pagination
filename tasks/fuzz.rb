@@ -1,4 +1,6 @@
 task :fuzz do
+  require 'pp'
+
   RECORD_COUNT = 10000
   ITERATION_COUNT = 10
   TESTS_PER_ITERATION = 50
@@ -43,7 +45,13 @@ task :fuzz do
 
     TESTS_PER_ITERATION.times do
       # Will add nullable columns when those are better supported.
-      possible_columns = [:non_nullable_1, :non_nullable_2]
+      possible_columns = [
+                           :non_nullable_1,
+                           :non_nullable_2,
+                           :nullable_1,
+                           :nullable_2,
+                         ]
+
       columns = possible_columns.sample(random(possible_columns.count))
 
       all_columns = columns + [:pk]
@@ -51,15 +59,32 @@ task :fuzz do
       offset = random(RECORD_COUNT - 1)
 
       ordering = all_columns.map do |column|
-        rand < 0.5 ? Sequel.asc(column) : Sequel.desc(column)
+        direction = rand < 0.5 ? :asc : :desc
+        Sequel.send(direction, column)
       end
 
-      after = DB[:seek].order(*ordering).offset(offset).get(all_columns)
+      ds = DB[:seek].order(*ordering)
 
-      expected = DB[:seek].order(*ordering).offset(offset + 1).limit(10).all
-      actual   = DB[:seek].order(*ordering).seek_paginate(10, after: after).all
+      after    = ds.offset(offset).get(all_columns)
+      expected = ds.offset(offset + 1).limit(10).all
+      actual   = ds.seek_paginate(10, after: after).all
 
-      raise "Bad!" unless actual == expected
+      unless actual == expected
+        puts "Uh-oh!"
+        puts "ds = #{ds.sql}"
+        puts "after = #{after.inspect}"
+        puts
+        puts "Expected:"
+        pp expected.map{|h| h.values_at(*all_columns)}
+        puts
+        puts "Actual:"
+        pp actual.map{|h| h.values_at(*all_columns)}
+
+        $break = true
+        ds.seek_paginate(10, after: after)
+
+        exit
+      end
     end
   end
 
