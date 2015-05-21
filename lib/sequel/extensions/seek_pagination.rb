@@ -26,14 +26,15 @@ module Sequel
     private
 
     class OrderedColumn
-      attr_reader :name, :direction
+      attr_reader :name, :direction, :nulls
 
       def initialize(order)
-        @name, @direction = case order
-                            when Symbol                         then [order, :asc]
-                            when Sequel::SQL::OrderedExpression then [order.expression, order.descending ? :desc : :asc]
-                            else raise "Unrecognized order!: #{order.inspect}"
-                            end
+        @name, @direction, @nulls =
+          case order
+          when Symbol                         then [order, :asc, :last]
+          when Sequel::SQL::OrderedExpression then [order.expression, order.descending ? :desc : :asc, order.nulls]
+          else raise "Unrecognized order!: #{order.inspect}"
+          end
       end
 
       class << self
@@ -72,11 +73,12 @@ module Sequel
 
         def ineq(column, value, eq: true)
           ascending = column.direction == :asc
+          nulls_upcoming = column.nulls == :last
           value_is_null = value.nil?
 
           method = "#{ascending ? '>' : '<'}#{'=' if eq}"
 
-          if ascending
+          if nulls_upcoming
             if value_is_null
               if eq
                 {column.name => nil}

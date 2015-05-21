@@ -60,7 +60,8 @@ task :fuzz do
 
       ordering = all_columns.map do |column|
         direction = rand < 0.5 ? :asc : :desc
-        Sequel.send(direction, column)
+        nulls = rand < 0.5 ? :first : :last
+        Sequel.send(direction, column, nulls: nulls)
       end
 
       ds = DB[:seek].order(*ordering)
