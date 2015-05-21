@@ -211,34 +211,4 @@ describe Sequel::SeekPagination do
       it "should page properly from a null starting point"
     end
   end
-
-  describe "random testing" do
-    it "should handle any permutation of accepted ordering criteria" do
-      3.times do |i|
-        DB[:seek].delete
-        repopulate_seek
-
-        # Will add nullable columns when those are better supported.
-        possible_columns = [:non_nullable_1, :non_nullable_2]
-        columns = possible_columns.sample(random(possible_columns.count))
-
-        all_columns = columns + [:pk]
-
-        10.times do
-          offset = random(999)
-
-          ordering = all_columns.map do |column|
-            rand < 0.5 ? Sequel.asc(column) : Sequel.desc(column)
-          end
-
-          after = DB[:seek].order(*ordering).offset(offset).get(all_columns)
-
-          expected = DB[:seek].order(*ordering).offset(offset + 1).limit(10).all
-          actual   = DB[:seek].order(*ordering).seek_paginate(10, after: after).all
-
-          actual.should == expected
-        end
-      end
-    end
-  end
 end
