@@ -12,12 +12,10 @@ module Sequel
         raise Error, "cannot seek paginate on a dataset with no order"
       end
 
-      orders = order.map { |o| OrderedColumn.new(o) }
-
       ds = limit(count)
 
       if after
-        OrderedColumn.apply(ds, orders.zip([*after]))
+        OrderedColumn.apply(ds, order.zip([*after]))
       else
         ds
       end
@@ -26,9 +24,10 @@ module Sequel
     private
 
     class OrderedColumn
-      attr_reader :name, :direction, :nulls
+      attr_reader :name, :direction, :nulls, :value
 
-      def initialize(order)
+      def initialize(order, value)
+        @value = value
         @name, @direction, @nulls =
           case order
           when Symbol                         then [order, :asc, :last]
@@ -37,64 +36,59 @@ module Sequel
           end
       end
 
+      def eq_filter
+        {name => value}
+      end
+
+      def null_filter
+        {name => nil}
+      end
+
+      def ineq(eq: true)
+        nulls_upcoming = nulls == :last
+
+        if !value.nil?
+          method = "#{direction == :asc ? '>' : '<'}#{'=' if eq}"
+          filter = Sequel.virtual_row{|o| o.__send__(method, name, value)}
+          nulls_upcoming ? Sequel.|(filter, null_filter) : filter
+        else
+          if nulls_upcoming && eq
+            null_filter
+          elsif !nulls_upcoming && !eq
+            Sequel.~(null_filter)
+          end
+        end
+      end
+
       class << self
-        def apply(dataset, sets)
-          length = sets.length
+        def apply(dataset, order_sets)
+          orders = order_sets.map { |order, value| new(order, value) }
+          length = orders.length
 
           dataset.where(
             Sequel.&(
               *length.times.map { |i|
                 is_last = i == length - 1
-                conditions = sets[0..i]
+                conditions = orders[0..i]
 
                 if i.zero?
-                  col, value = conditions[0]
-                  ineq(col, value, eq: !is_last) || true
+                  conditions[0].ineq(eq: !is_last)
                 else
-                  c0, v0 = conditions[-2]
-                  c1, v1 = conditions[-1]
+                  c = conditions[-2]
 
-                  filter = ineq(c1, v1, eq: !is_last)
-                  list = filter ? [Sequel.&({c0.name => v0}, filter)] : [{c0.name => v0}]
+                  list = if filter = conditions[-1].ineq(eq: !is_last)
+                           [Sequel.&(c.eq_filter, filter)]
+                         else
+                           [c.eq_filter]
+                         end
 
-                  conditions[0..-2].each do |c, v|
-                    if filter = ineq(c, v, eq: false)
-                      list << filter
-                    end
-                  end
-                  Sequel.|(*list)
+                  list += conditions[0..-2].map { |c| c.ineq(eq: false) }
+
+                  Sequel.|(*list.compact)
                 end
-              }
+              }.compact
             )
           )
-        end
-
-        private
-
-        def ineq(column, value, eq: true)
-          ascending = column.direction == :asc
-          nulls_upcoming = column.nulls == :last
-          value_is_null = value.nil?
-
-          method = "#{ascending ? '>' : '<'}#{'=' if eq}"
-
-          if nulls_upcoming
-            if value_is_null
-              if eq
-                {column.name => nil}
-              end
-            else
-              Sequel.|(Sequel.virtual_row{|o| o.__send__(method, column.name, value)}, {column.name => nil})
-            end
-          else
-            if value_is_null
-              if !eq
-                Sequel.~({column.name => nil})
-              end
-            else
-              Sequel.virtual_row { |o| o.__send__(method, column.name, value) }
-            end
-          end
         end
       end
     end
