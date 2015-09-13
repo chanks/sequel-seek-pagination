@@ -5,16 +5,20 @@ module Sequel
   module SeekPagination
     class Error < StandardError; end
 
-    def seek_paginate(count, after: nil)
+    def seek_paginate(count, from: nil, after: nil)
       order = opts[:order]
 
       if order.nil? || order.length.zero?
         raise Error, "cannot seek paginate on a dataset with no order"
+      elsif after && from
+        raise Error, "cannot pass both :after and :from params to seek_paginate"
       end
 
       ds = limit(count)
 
-      if after
+      if from
+        OrderedColumn.apply(ds, order.zip([*from]), include_value: true)
+      elsif after
         OrderedColumn.apply(ds, order.zip([*after]))
       else
         ds
@@ -61,7 +65,7 @@ module Sequel
       end
 
       class << self
-        def apply(dataset, order_sets)
+        def apply(dataset, order_sets, include_value: false)
           orders = order_sets.map { |order, value| new(order, value) }
           length = orders.length
 
@@ -72,11 +76,11 @@ module Sequel
                 conditions = orders[0..i]
 
                 if i.zero?
-                  conditions[0].ineq(eq: !is_last)
+                  conditions[0].ineq(eq: (include_value || !is_last))
                 else
                   c = conditions[-2]
 
-                  list = if filter = conditions[-1].ineq(eq: !is_last)
+                  list = if filter = conditions[-1].ineq(eq: (include_value || !is_last))
                            [Sequel.&(c.eq_filter, filter)]
                          else
                            [c.eq_filter]
