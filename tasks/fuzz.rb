@@ -2,8 +2,8 @@ task :fuzz do
   require 'pp'
 
   RECORD_COUNT = 10000
-  ITERATION_COUNT = 10
-  TESTS_PER_ITERATION = 50
+  ITERATION_COUNT = 3
+  TESTS_PER_ITERATION = 20
 
   require 'sequel-seek-pagination'
 
@@ -34,62 +34,66 @@ task :fuzz do
   end
 
   [:from, :after].each do |type|
-    (1..ITERATION_COUNT).each do |i|
-      puts "Iteration #{i}..."
+    [true, false].each do |include_nullable_information|
+      (1..ITERATION_COUNT).each do |i|
+        puts "#{type}, not_null columns #{include_nullable_information ? 'present' : 'missing'}, iteration #{i}..."
 
-      DB[:seek].delete
-      repopulate_seek
+        DB[:seek].delete
+        repopulate_seek
 
-      TESTS_PER_ITERATION.times do
-        # Will add nullable columns when those are better supported.
-        possible_columns = [
-                             :non_nullable_1,
-                             :non_nullable_2,
-                             :nullable_1,
-                             :nullable_2,
-                           ]
+        TESTS_PER_ITERATION.times do
+          # Will add nullable columns when those are better supported.
+          possible_columns = [
+                               :non_nullable_1,
+                               :non_nullable_2,
+                               :nullable_1,
+                               :nullable_2,
+                             ]
 
-        columns = possible_columns.sample(rand(possible_columns.count))
+          columns = possible_columns.sample(rand(possible_columns.count))
 
-        all_columns = columns + [:pk]
+          all_columns = columns + [:pk]
 
-        offset = rand(RECORD_COUNT)
+          offset = rand(RECORD_COUNT)
 
-        ordering = all_columns.map do |column|
-          direction = rand < 0.5 ? :asc : :desc
-          nulls = rand < 0.5 ? :first : :last
-          Sequel.send(direction, column, nulls: nulls)
-        end
-
-        ds = DB[:seek].order(*ordering)
-
-        value = ds.offset(offset).get(all_columns)
-
-        expected, actual =
-          case type
-          when :from
-            [ds.offset(offset).limit(10).all, ds.seek_paginate(10, from: value).all]
-          when :after
-            [ds.offset(offset + 1).limit(10).all, ds.seek_paginate(10, after: value).all]
-          else
-            raise "Bad type: #{type}"
+          ordering = all_columns.map do |column|
+            direction = rand < 0.5 ? :asc : :desc
+            nulls = rand < 0.5 ? :first : :last
+            Sequel.send(direction, column, nulls: nulls)
           end
 
-        unless actual == expected
-          puts "Uh-oh!"
-          puts "ds = #{ds.sql}"
-          puts "value = #{value.inspect}"
-          puts
-          puts "Expected:"
-          pp expected.map{|h| h.values_at(*all_columns)}
-          puts
-          puts "Actual:"
-          pp actual.map{|h| h.values_at(*all_columns)}
+          ds = DB[:seek].order(*ordering)
 
-          $break = true
-          ds.seek_paginate(10, after: after)
+          value = ds.offset(offset).get(all_columns)
 
-          exit
+          options = {}
+          options[:not_null] = [:pk, :non_nullable_1, :non_nullable_2] if include_nullable_information
+
+          expected, actual =
+            case type
+            when :from
+              [ds.offset(offset).limit(10).all, ds.seek_paginate(10, options.merge(from: value)).all]
+            when :after
+              [ds.offset(offset + 1).limit(10).all, ds.seek_paginate(10, options.merge(after: value)).all]
+            else
+              raise "Bad type: #{type}"
+            end
+
+          unless actual == expected
+            puts "Uh-oh!"
+            puts "ds = #{ds.sql}"
+            puts "value = #{value.inspect}"
+            puts
+            puts "Expected:"
+            pp expected.map{|h| h.values_at(*all_columns)}
+            puts
+            puts "Actual:"
+            pp actual.map{|h| h.values_at(*all_columns)}
+
+            ds.seek_paginate(10, after: after)
+
+            exit
+          end
         end
       end
     end

@@ -1,6 +1,10 @@
 task :benchmark do
   require 'sequel-seek-pagination'
 
+  RECORD_COUNT = 100000
+  ITERATION_COUNT = 10
+
+  Sequel.extension :core_extensions
   Sequel::Database.extension :seek_pagination
 
   DB = Sequel.connect "postgres:///sequel-seek-pagination-test"
@@ -10,23 +14,34 @@ task :benchmark do
   DB.create_table :seek do
     primary_key :id
 
-    integer :col1, null: false
+    integer :non_nullable_1, null: false
+    integer :non_nullable_2, null: false
 
-    text :content, null: false # Prevent index-only scans.
+    integer :nullable_1
+    integer :nullable_2
 
-    index [:col1, :id]
+    text :content # Prevent index-only scans.
   end
 
-  RECORD_COUNT = 100000
-  ITERATION_COUNT = 10
+  DB.run <<-SQL
+    INSERT INTO seek
+      (non_nullable_1, non_nullable_2, nullable_1, nullable_2, content)
+    SELECT trunc(random() * 10 + 1),
+           trunc(random() * 10 + 1),
+           CASE WHEN random() > 0.5 THEN trunc(random() * 10 + 1) ELSE NULL END,
+           CASE WHEN random() > 0.5 THEN trunc(random() * 10 + 1) ELSE NULL END,
+           md5(random()::text)
+    FROM generate_series(1, #{RECORD_COUNT}) s
+  SQL
 
-  DB[:seek].insert([:content, :col1], DB[Sequel.function(:generate_series, 1, RECORD_COUNT).as(:i)].select{[md5(Sequel.cast(random{}, :text)), mod(:i, 100) + 1]})
+  DB.add_index :seek, [:non_nullable_1]
 
   {
-    "Single column, unique, not-null, ascending"     => DB[:seek].order(:id).seek_paginate(30, after: rand(RECORD_COUNT) + 1),
-    "Single column, unique, not-null, descending"    => DB[:seek].order(Sequel.desc(:id)).seek_paginate(30, after: rand(RECORD_COUNT) + 1),
-    "Multiple columns, unique, not-null, ascending"  => DB[:seek].order(:col1, :id).seek_paginate(30, after: [5, rand(RECORD_COUNT) + 1]),
-    "Multiple columns, unique, not-null, descending" => DB[:seek].order(Sequel.desc(:col1), Sequel.desc(:id)).seek_paginate(30, after: [5, rand(RECORD_COUNT) + 1]),
+    "1 column, not-null, ascending"   => DB[:seek].order(:id.asc ).seek_paginate(30, after: rand(RECORD_COUNT) + 1),
+    "1 column, not-null, descending"  => DB[:seek].order(:id.desc).seek_paginate(30, after: rand(RECORD_COUNT) + 1),
+
+    "2 columns, not-null, ascending"  => DB[:seek].order(:non_nullable_1.asc,  :id.asc ).seek_paginate(30, after: [5, rand(RECORD_COUNT) + 1]),
+    "2 columns, not-null, descending" => DB[:seek].order(:non_nullable_1.desc, :id.desc).seek_paginate(30, after: [5, rand(RECORD_COUNT) + 1]),
   }.each do |description, ds|
     puts
     puts description + ':'
