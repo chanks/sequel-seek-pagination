@@ -34,7 +34,31 @@ describe Sequel::SeekPagination do
   it "should raise an error if the dataset is not ordered" do
     proc {
       DB[:seek].seek_paginate(30)
-    }.should raise_error Sequel::SeekPagination::Error, /cannot seek paginate on a dataset with no order/
+    }.should raise_error Sequel::SeekPagination::Error, /cannot seek_paginate on a dataset with no order/
+  end
+
+  it "should raise an error if given both from and after arguments" do
+    proc {
+      DB[:seek].order(:pk).seek_paginate(30, from: 3, after: 4)
+    }.should raise_error Sequel::SeekPagination::Error, /cannot pass both :from and :after params to seek_paginate/
+  end
+
+  it "should raise an error if given the wrong number of values to from or after" do
+    proc {
+      DB[:seek].order(:pk, :nullable_1).seek_paginate(30, from: [3])
+    }.should raise_error Sequel::SeekPagination::Error, /passed the wrong number of values in the :from option to seek_paginate/
+
+    proc {
+      DB[:seek].order(:pk, :nullable_1).seek_paginate(30, after: [3])
+    }.should raise_error Sequel::SeekPagination::Error, /passed the wrong number of values in the :after option to seek_paginate/
+
+    proc {
+      DB[:seek].order(:pk, :nullable_1).seek_paginate(30, from: [3, 4, 5])
+    }.should raise_error Sequel::SeekPagination::Error, /passed the wrong number of values in the :from option to seek_paginate/
+
+    proc {
+      DB[:seek].order(:pk, :nullable_1).seek_paginate(30, after: [3, 4, 5])
+    }.should raise_error Sequel::SeekPagination::Error, /passed the wrong number of values in the :after option to seek_paginate/
   end
 
   describe "when ordering by a single column" do

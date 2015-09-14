@@ -9,17 +9,21 @@ module Sequel
       order = opts[:order]
 
       if order.nil? || order.length.zero?
-        raise Error, "cannot seek paginate on a dataset with no order"
-      elsif after && from
-        raise Error, "cannot pass both :after and :from params to seek_paginate"
+        raise Error, "cannot seek_paginate on a dataset with no order"
+      elsif from && after
+        raise Error, "cannot pass both :from and :after params to seek_paginate"
       end
 
       ds = limit(count)
 
-      if from
-        OrderedColumn.apply(ds, order.zip([*from]), include_value: true, not_null: not_null)
-      elsif after
-        OrderedColumn.apply(ds, order.zip([*after]), not_null: not_null)
+      if values = from || after
+        values = Array(values)
+
+        if values.length != order.length
+          raise Error, "passed the wrong number of values in the :#{from ? 'from' : 'after'} option to seek_paginate"
+        end
+
+        OrderedColumn.apply(ds, order.zip(values), include_value: !!from, not_null: not_null)
       else
         ds
       end
