@@ -28,17 +28,34 @@ module Sequel
     private
 
     class OrderedColumn
-      attr_reader :name, :direction, :nulls, :value
+      attr_reader :name, :direction, :nulls, :value, :not_null
 
       def initialize(order, value, not_null:)
         @value = value
         @not_null = not_null
         @name, @direction, @nulls =
           case order
-          when Symbol                         then [order, :asc, :last]
-          when Sequel::SQL::OrderedExpression then [order.expression, order.descending ? :desc : :asc, order.nulls]
-          else raise "Unrecognized order!: #{order.inspect}"
+          when Symbol
+            [order, :asc, :last]
+          when Sequel::SQL::OrderedExpression
+            direction = order.descending ? :desc : :asc
+            nulls = order.nulls || default_nulls_option_for_direction(direction)
+            [order.expression, direction, nulls]
+          else
+            raise "Unrecognized order!: #{order.inspect}"
           end
+      end
+
+      def default_nulls_option_for_direction(direction)
+        case direction
+        when :asc  then :last
+        when :desc then :first
+        else raise "Bad direction: #{direction.inspect}"
+        end
+      end
+
+      def nulls_option_is_default?
+        nulls == default_nulls_option_for_direction(direction)
       end
 
       def eq_filter
@@ -78,6 +95,13 @@ module Sequel
           end
 
           length = orders.length
+
+          # Special-case the common case where we can do WHERE (non_nullable_1, non_nullable_2) > (1, 2)
+          if length > 1 && orders.map(&:direction).uniq.length == 1 && orders.all? { |o| o.not_null && o.nulls_option_is_default? }
+            method = orders.first.direction == :asc ? '>' : '<'
+            method << '='.freeze if include_value
+            return dataset.where{|o| o.__send__(method, orders.map(&:name), orders.map(&:value))}
+          end
 
           dataset.where(
             Sequel.&(
