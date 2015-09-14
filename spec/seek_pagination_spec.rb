@@ -1,231 +1,163 @@
 require 'spec_helper'
 
 class SeekPaginationSpec < Minitest::Spec
-  def random(max)
-    rand(max) + 1
+  SEEK_COUNT = DB[:seek].count
+
+  def assert_equal_results(ds1, ds2)
+    assert_equal ds1.all, ds2.all
   end
 
-  def repopulate_seek(count = 1000)
-    DB.run <<-SQL
-      INSERT INTO seek
-        (non_nullable_1, non_nullable_2, nullable_1, nullable_2)
-      SELECT trunc(random() * 10 + 1),
-             trunc(random() * 10 + 1),
-             CASE WHEN random() > 0.5 THEN trunc(random() * 10 + 1) ELSE NULL END,
-             CASE WHEN random() > 0.5 THEN trunc(random() * 10 + 1) ELSE NULL END
-      FROM generate_series(1, #{count}) s
-    SQL
-  end
+  class << self
+    def it_should_seek_paginate_properly(ordering)
+      dataset = DB[:seek].order(*ordering)
+      columns = ordering.map do |order|
+                  case order
+                  when Symbol then order
+                  when Sequel::SQL::OrderedExpression then order.expression
+                  else raise "Bad order! #{order.inspect}"
+                  end
+                end
 
-  before do
-    DB.drop_table? :seek
+      it "should limit the dataset appropriately when a starting point is not given" do
+        assert_equal_results dataset.limit(10),
+                             dataset.seek_paginate(10)
+      end
 
-    DB.create_table :seek do
-      primary_key :pk
-      integer :non_nullable_1, null: false
-      integer :non_nullable_2, null: false
-      integer :nullable_1
-      integer :nullable_2
+      it "should page properly when given a point to start from/after" do
+        offset = rand(SEEK_COUNT)
+        values = dataset.offset(offset).get(columns)
+
+        assert_equal_results dataset.offset(offset).limit(100),
+                             dataset.seek_paginate(100, from: values)
+
+        assert_equal_results dataset.offset(offset + 1).limit(100),
+                             dataset.seek_paginate(100, after: values)
+
+        if columns.length == 1
+          # Should wrap values in an array if necessary
+          assert_equal_results dataset.offset(offset).limit(100),
+                               dataset.seek_paginate(100, from: values.first)
+
+          assert_equal_results dataset.offset(offset + 1).limit(100),
+                               dataset.seek_paginate(100, after: values.first)
+        end
+      end
+
+      it "should return correct results when nullability information is provided" do
+        offset = rand(SEEK_COUNT)
+        values = dataset.offset(offset).get(columns)
+
+        assert_equal_results dataset.offset(offset).limit(100),
+                             dataset.seek_paginate(100, from: values, not_null: [:id, :non_nullable_1, :non_nullable_2])
+
+        assert_equal_results dataset.offset(offset + 1).limit(100),
+                             dataset.seek_paginate(100, after: values, not_null: [:id, :non_nullable_1, :non_nullable_2])
+      end
     end
+  end
 
-    repopulate_seek
+  describe "for ordering by a single not-null column in either order" do
+    [:id.asc, :id.desc].each do |o1|
+      it_should_seek_paginate_properly [o1]
+    end
+  end
+
+  describe "for ordering by two not-null columns in any order" do
+    [:not_nullable_1.asc, :not_nullable_1.desc].each do |o1|
+      [:id.asc, :id.desc].each do |o2|
+        it_should_seek_paginate_properly [o1, o2]
+      end
+    end
+  end
+
+  describe "for ordering by three not-null columns in any order" do
+    [:not_nullable_1.asc, :not_nullable_1.desc].each do |o1|
+      [:not_nullable_2.asc, :not_nullable_2.desc].each do |o2|
+        [:id.asc, :id.desc].each do |o3|
+          it_should_seek_paginate_properly [o1, o2, o3]
+        end
+      end
+    end
+  end
+
+  describe "for ordering by a nullable column" do
+    # We still tack on :id because the ordering needs to be unique.
+    [:nullable_1.asc, :nullable_1.desc, :nullable_1.asc(nulls: :first), :nullable_1.desc(nulls: :last)].each do |o1|
+      [:id.asc, :id.desc].each do |o2|
+        it_should_seek_paginate_properly [o1, o2]
+      end
+    end
+  end
+
+  describe "for ordering by multiple nullable columns" do
+    # We still tack on :id because the ordering needs to be unique.
+    [:nullable_1.asc, :nullable_1.desc, :nullable_1.asc(nulls: :first), :nullable_1.desc(nulls: :last)].each do |o1|
+      [:nullable_2.asc, :nullable_2.desc, :nullable_2.asc(nulls: :first), :nullable_2.desc(nulls: :last)].each do |o2|
+        [:id.asc, :id.desc].each do |o3|
+          it_should_seek_paginate_properly [o1, o2, o3]
+        end
+      end
+    end
+  end
+
+  describe "for ordering by a mix of nullable and not-nullable columns" do
+    20.times do
+      columns = [
+        [:not_nullable_1.asc, :not_nullable_1.desc],
+        [:not_nullable_2.asc, :not_nullable_2.desc],
+        [:nullable_1.asc, :nullable_1.desc, :nullable_1.asc(nulls: :first), :nullable_1.desc(nulls: :last)],
+        [:nullable_2.asc, :nullable_2.desc, :nullable_2.asc(nulls: :first), :nullable_2.desc(nulls: :last)],
+      ]
+
+      testing_columns = columns.sample(rand(columns.count) + 1).map(&:sample)
+      testing_columns << [:id.asc, :id.desc].sample
+
+      it_should_seek_paginate_properly(testing_columns)
+    end
+  end
+
+  it "should work for order clauses of many types" do
+    datasets = [
+      DB[:seek].order(:id),
+      DB[:seek].order(:seek__id),
+      DB[:seek].order(:id.asc),
+      DB[:seek].order(:seek__id.asc),
+      DB[:seek].order(:id.desc).reverse_order,
+      DB[:seek].order(:seek__id.desc).reverse_order,
+    ]
+
+    # With point to start from/after:
+    id = DB[:seek].order(:id).offset(56).get(:id)
+
+    datasets.each do |dataset|
+      assert_equal_results DB[:seek].order(:id).limit(5),
+                           dataset.seek_paginate(5)
+
+      assert_equal_results DB[:seek].order(:id).offset(56).limit(5),
+                           dataset.seek_paginate(5, from: id)
+
+      assert_equal_results DB[:seek].order(:id).offset(57).limit(5),
+                           dataset.seek_paginate(5, after: id)
+    end
+  end
+
+  def assert_error_message(message, &block)
+    error = assert_raises(Sequel::SeekPagination::Error, &block)
+    assert_equal message, error.message
   end
 
   it "should raise an error if the dataset is not ordered" do
-    error = assert_raises(Sequel::SeekPagination::Error) { DB[:seek].seek_paginate(30) }
-    assert_match(/cannot seek_paginate on a dataset with no order/, error.message)
+    assert_error_message("cannot seek_paginate on a dataset with no order") { DB[:seek].seek_paginate(30) }
   end
 
-  it "should raise an error if given both from and after arguments" do
-    error = assert_raises(Sequel::SeekPagination::Error) { DB[:seek].order(:pk).seek_paginate(30, from: 3, after: 4) }
-    assert_match(/cannot pass both :from and :after params to seek_paginate/, error.message)
+  it "should raise an error if the dataset is not ordered" do
+    assert_error_message("cannot pass both :from and :after params to seek_paginate") { DB[:seek].order(:id).seek_paginate(30, from: 3, after: 4) }
   end
 
   it "should raise an error if given the wrong number of values to from or after" do
-    error = assert_raises(Sequel::SeekPagination::Error) { DB[:seek].order(:pk, :nullable_1).seek_paginate(30, from: [3]) }
-    assert_match(/passed the wrong number of values in the :from option to seek_paginate/, error.message)
-
-    error = assert_raises(Sequel::SeekPagination::Error) { DB[:seek].order(:pk, :nullable_1).seek_paginate(30, after: [3]) }
-    assert_match(/passed the wrong number of values in the :after option to seek_paginate/, error.message)
-
-    error = assert_raises(Sequel::SeekPagination::Error) { DB[:seek].order(:pk, :nullable_1).seek_paginate(30, from: [3, 4, 5]) }
-    assert_match(/passed the wrong number of values in the :from option to seek_paginate/, error.message)
-
-    error = assert_raises(Sequel::SeekPagination::Error) { DB[:seek].order(:pk, :nullable_1).seek_paginate(30, after: [3, 4, 5]) }
-    assert_match(/passed the wrong number of values in the :after option to seek_paginate/, error.message)
-  end
-
-  describe "when ordering by a single column" do
-    it "should limit the dataset appropriately when a starting point is not given" do
-      assert_equal DB[:seek].order(:pk).seek_paginate(5).all, DB[:seek].order_by(:pk).limit(5).all
-      # Then in reverse:
-      assert_equal DB[:seek].order(Sequel.desc(:pk)).seek_paginate(5).all, DB[:seek].order_by(Sequel.desc(:pk)).limit(5).all
-    end
-
-    it "should page properly when given a starting point" do
-      pk = DB[:seek].order(:pk).offset(56).get(:pk)
-
-      result = DB[:seek].order(:pk).seek_paginate(5, after: pk).all
-      assert_equal result, DB[:seek].order(:pk).offset(57).limit(5).all
-
-      result = DB[:seek].order(:pk).seek_paginate(5, after: [pk]).all
-      assert_equal result, DB[:seek].order(:pk).offset(57).limit(5).all
-
-      # Then in reverse:
-      pk = DB[:seek].order(Sequel.desc(:pk)).offset(56).get(:pk)
-
-      result = DB[:seek].order(Sequel.desc(:pk)).seek_paginate(5, after: pk).all
-      assert_equal result, DB[:seek].order(Sequel.desc(:pk)).offset(57).limit(5).all
-
-      result = DB[:seek].order(Sequel.desc(:pk)).seek_paginate(5, after: [pk]).all
-      assert_equal result, DB[:seek].order(Sequel.desc(:pk)).offset(57).limit(5).all
-    end
-
-    it "should accept whatever type of order clause is there" do
-      datasets = [
-        DB[:seek].order(:pk),
-        DB[:seek].order(:seek__pk),
-        DB[:seek].order(Sequel.asc(:pk)),
-        DB[:seek].order(Sequel.asc(:seek__pk)),
-        DB[:seek].order(Sequel.desc(:pk)).reverse_order
-      ]
-
-      datasets.each do |dataset|
-        assert_equal dataset.seek_paginate(5).all, DB[:seek].order_by(:pk).limit(5).all
-      end
-
-      # Then in reverse:
-      assert_equal DB[:seek].order(Sequel.desc(:pk)).seek_paginate(5).all, DB[:seek].order_by(Sequel.desc(:pk)).limit(5).all
-
-      # With starting points:
-      datasets.each do |dataset|
-        pk = DB[:seek].order(:pk).offset(56).get(:pk)
-
-        result = dataset.seek_paginate(5, after: pk).all
-        assert_equal result, DB[:seek].order(:pk).offset(57).limit(5).all
-
-        result = dataset.seek_paginate(5, after: [pk]).all
-        assert_equal result, DB[:seek].order(:pk).offset(57).limit(5).all
-      end
-
-      # Then in reverse:
-      pk = DB[:seek].order(Sequel.desc(:pk)).offset(56).get(:pk)
-
-      result = DB[:seek].order(Sequel.desc(:pk)).seek_paginate(5, after: pk).all
-      assert_equal result, DB[:seek].order(Sequel.desc(:pk)).offset(57).limit(5).all
-
-      result = DB[:seek].order(Sequel.desc(:pk)).seek_paginate(5, after: [pk]).all
-      assert_equal result, DB[:seek].order(Sequel.desc(:pk)).offset(57).limit(5).all
-    end
-  end
-
-  describe "when ordering by multiple columns" do
-    describe "by two columns" do
-      it "should limit the dataset appropriately when a starting point is not given" do
-        result = DB[:seek].order(:non_nullable_1, :pk).seek_paginate(5).all
-        assert_equal result, DB[:seek].order(:non_nullable_1, :pk).limit(5).all
-
-        # Then in reverse:
-        result = DB[:seek].order(Sequel.desc(:seek__non_nullable_1), Sequel.desc(:seek__pk)).seek_paginate(5).all
-        assert_equal result, DB[:seek].order(Sequel.desc(:non_nullable_1), Sequel.desc(:pk)).limit(5).all
-      end
-
-      it "should page properly when given a starting point" do
-        pair = DB[:seek].order(:non_nullable_1, :pk).offset(56).get([:non_nullable_1, :pk])
-
-        result = DB[:seek].order(:non_nullable_1, :pk).seek_paginate(5, after: pair).all
-        assert_equal result, DB[:seek].order(:non_nullable_1, :pk).offset(57).limit(5).all
-
-        # Then in reverse:
-        pair = DB[:seek].order(Sequel.desc(:non_nullable_1), Sequel.desc(:pk)).offset(56).get([:non_nullable_1, :pk])
-
-        result = DB[:seek].order(Sequel.desc(:non_nullable_1), Sequel.desc(:pk)).seek_paginate(5, after: pair).all
-        assert_equal result, DB[:seek].order(Sequel.desc(:non_nullable_1), Sequel.desc(:pk)).offset(57).limit(5).all
-      end
-    end
-
-    describe "by three columns" do
-      it "should limit the dataset appropriately when a starting point is not given" do
-        result = DB[:seek].order(:non_nullable_1, :non_nullable_2, :pk).seek_paginate(5).all
-        assert_equal result, DB[:seek].order(:non_nullable_1, :non_nullable_2, :pk).limit(5).all
-
-        # Then in reverse:
-        result = DB[:seek].order(Sequel.desc(:seek__non_nullable_1), Sequel.desc(:seek__non_nullable_2), Sequel.desc(:seek__pk)).seek_paginate(5).all
-        assert_equal result, DB[:seek].order(Sequel.desc(:non_nullable_1), Sequel.desc(:non_nullable_2), Sequel.desc(:pk)).limit(5).all
-      end
-
-      it "should page properly when given a starting point" do
-        trio = DB[:seek].order(:non_nullable_1, :non_nullable_2, :pk).offset(56).get([:non_nullable_1, :non_nullable_2, :pk])
-
-        result = DB[:seek].order(:non_nullable_1, :non_nullable_2, :pk).seek_paginate(5, after: trio).all
-        assert_equal result, DB[:seek].order(:non_nullable_1, :non_nullable_2, :pk).offset(57).limit(5).all
-
-        # Then in reverse:
-        pair = DB[:seek].order(Sequel.desc(:non_nullable_1), Sequel.desc(:non_nullable_2), Sequel.desc(:pk)).offset(56).get([:non_nullable_1, :non_nullable_2, :pk])
-
-        result = DB[:seek].order(Sequel.desc(:non_nullable_1), Sequel.desc(:non_nullable_2), Sequel.desc(:pk)).seek_paginate(5, after: pair).all
-        assert_equal result, DB[:seek].order(Sequel.desc(:non_nullable_1), Sequel.desc(:non_nullable_2), Sequel.desc(:pk)).offset(57).limit(5).all
-      end
-    end
-  end
-
-  describe "when ordering in different directions" do
-    it "by two columns should page properly when given a starting point" do
-      datasets = [
-        DB[:seek].order(:non_nullable_1, Sequel.desc(:pk)),
-        DB[:seek].order(Sequel.desc(:non_nullable_1), :pk)
-      ]
-
-      datasets.each do |ds|
-        pair = ds.offset(56).get([:non_nullable_1, :pk])
-        result = ds.seek_paginate(5, after: pair).all
-        assert_equal result, ds.offset(57).limit(5).all
-      end
-    end
-
-    it "by three columns should page properly when given a starting point" do
-      datasets = [
-        DB[:seek].order(Sequel.desc(:non_nullable_1), :non_nullable_2, :pk),
-        DB[:seek].order(:non_nullable_1, Sequel.desc(:non_nullable_2), :pk),
-        DB[:seek].order(:non_nullable_1, :non_nullable_2, Sequel.desc(:pk)),
-        DB[:seek].order(:non_nullable_1, Sequel.desc(:non_nullable_2), Sequel.desc(:pk)),
-        DB[:seek].order(Sequel.desc(:non_nullable_1), :non_nullable_2, Sequel.desc(:pk)),
-        DB[:seek].order(Sequel.desc(:non_nullable_1), Sequel.desc(:non_nullable_2), :pk)
-      ]
-
-      datasets.each do |ds|
-        trio = ds.offset(56).get([:non_nullable_1, :non_nullable_2, :pk])
-        result = ds.seek_paginate(5, after: trio).all
-        assert_equal result, ds.offset(57).limit(5).all
-      end
-    end
-  end
-
-  describe "when ordering by nullable columns" do
-    describe "when ordering by two columns, the first of which is nullable" do
-      it "should page properly from a non-null starting point"
-
-      it "should page properly from a null starting point"
-    end
-
-    describe "when ordering by three columns, the first two of which are nullable" do
-      it "should page properly from a non-null starting point"
-
-      it "should page properly from a null starting point"
-    end
-  end
-
-  describe "when ordering with nulls first/last settings" do
-    describe "by two columns" do
-      it "should page properly from a non-null starting point"
-
-      it "should page properly from a null starting point"
-    end
-
-    describe "by three columns" do
-      it "should page properly from a non-null starting point"
-
-      it "should page properly from a null starting point"
-    end
+    assert_error_message("passed the wrong number of values in the :from option to seek_paginate")  { DB[:seek].order(:id, :nullable_1).seek_paginate(30, from:  [3]) }
+    assert_error_message("passed the wrong number of values in the :after option to seek_paginate") { DB[:seek].order(:id, :nullable_1).seek_paginate(30, after: [3]) }
+    assert_error_message("passed the wrong number of values in the :from option to seek_paginate")  { DB[:seek].order(:id, :nullable_1).seek_paginate(30, from:  [3, 4, 5]) }
+    assert_error_message("passed the wrong number of values in the :after option to seek_paginate") { DB[:seek].order(:id, :nullable_1).seek_paginate(30, after: [3, 4, 5]) }
   end
 end
