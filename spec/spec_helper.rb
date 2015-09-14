@@ -1,4 +1,6 @@
-require 'sequel-seek-pagination'
+require 'sequel'
+
+$: << File.join(File.dirname(__FILE__), '..', 'lib')
 
 Sequel::Database.extension :seek_pagination
 
@@ -15,3 +17,7 @@ DB.create_table :seek do
 end
 
 DB[:seek].insert([:content, :col1], DB[Sequel.function(:generate_series, 1, 1000).as(:i)].select{[md5(Sequel.cast(random{}, :text)), mod(:i, 5) + 1]})
+
+require 'pry'
+require 'minitest/autorun'
+require 'minitest/rg'
