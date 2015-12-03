@@ -19,13 +19,33 @@ module Sequel
 
       ds = limit(count)
 
+
+
       if values = from || after
         values = Array(values)
 
         if values.length != order.length
           raise Error, "passed the wrong number of values in the :#{from ? 'from' : 'after'} option to seek_paginate"
         end
+      end
 
+      if pk = from_pk || after_pk
+        selections = order.map do |o|
+          case o
+          when Symbol
+            o
+          when Sequel::SQL::OrderedExpression
+            o.expression
+          else
+            raise "Unhandled order type!: #{o.class}"
+          end
+        end
+
+        gettable = selections.zip(:a..:z).map{|s,a| Sequel.as(s, a)}
+        values = where(model.qualified_primary_key_hash(pk)).get(gettable)
+      end
+
+      if values
         if not_null.nil?
           not_null = []
 
@@ -40,7 +60,7 @@ module Sequel
 
         # If we're paginating with a :from value, we want to include the row
         # that has those exact values.
-        OrderedColumnSet.new(order.zip(values), include_exact_match: !!from, not_null: not_null).apply(ds)
+        OrderedColumnSet.new(order.zip(values), include_exact_match: !!(from || from_pk), not_null: not_null).apply(ds)
       else
         ds
       end

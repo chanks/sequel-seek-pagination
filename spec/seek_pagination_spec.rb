@@ -68,8 +68,6 @@ class SeekPaginationSpec < Minitest::Spec
 
           if dataset_type == :model
             it "should page properly when given a primary key to start from/after" do
-              skip
-
               offset = rand(SEEK_COUNT)
               id     = dataset.offset(offset).get(:id)
 
