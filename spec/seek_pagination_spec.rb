@@ -201,6 +201,11 @@ class SeekPaginationSpec < Minitest::Spec
     assert_error_message("passed the wrong number of values in the :after option to seek_paginate") { DB[:seek].order(:id, :nullable_1).seek_paginate(30, after: [3, 4, 5]) }
   end
 
+  it "should raise an error if from_pk or after_pk are passed to a dataset without an associated model" do
+    assert_error_message("passed the :from_pk option to seek_paginate on a dataset that doesn't have an associated model") { DB[:seek].order(:id, :nullable_1).seek_paginate(30, from_pk: 3) }
+    assert_error_message("passed the :after_pk option to seek_paginate on a dataset that doesn't have an associated model") { DB[:seek].order(:id, :nullable_1).seek_paginate(30, after_pk: 3) }
+  end
+
   describe "when chained from a model" do
     it "should be able to determine from the schema what columns are not null" do
       assert_equal %(SELECT * FROM "seek" WHERE (("not_nullable_1", "not_nullable_2", "id") > (1, 2, 3)) ORDER BY "not_nullable_1", "not_nullable_2", "id" LIMIT 5),

@@ -13,6 +13,8 @@ module Sequel
         raise Error, "cannot seek_paginate on a dataset with no order"
       elsif from && after
         raise Error, "cannot pass both :from and :after params to seek_paginate"
+      elsif model.nil? && (from_pk || after_pk)
+        raise Error, "passed the :#{from_pk ? 'from' : 'after'}_pk option to seek_paginate on a dataset that doesn't have an associated model"
       end
 
       ds = limit(count)
