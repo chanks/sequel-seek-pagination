@@ -141,6 +141,11 @@ class SeekPaginationSpec < Minitest::Spec
     end
   end
 
+  it "should be able to determine from the dataset model what columns are not null" do
+    assert_equal %(SELECT * FROM "seek" WHERE (("not_nullable_1", "not_nullable_2", "id") > (1, 2, 3)) ORDER BY "not_nullable_1", "not_nullable_2", "id" LIMIT 5),
+      SeekModel.order(:not_nullable_1, :not_nullable_2, :id).seek_paginate(5, after: [1, 2, 3]).sql
+  end
+
   def assert_error_message(message, &block)
     error = assert_raises(Sequel::SeekPagination::Error, &block)
     assert_equal message, error.message

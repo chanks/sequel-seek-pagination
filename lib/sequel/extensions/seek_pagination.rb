@@ -5,7 +5,7 @@ module Sequel
   module SeekPagination
     class Error < StandardError; end
 
-    def seek_paginate(count, from: nil, after: nil, not_null: [])
+    def seek_paginate(count, from: nil, after: nil, not_null: nil)
       order = opts[:order]
 
       if order.nil? || order.length.zero?
@@ -21,6 +21,16 @@ module Sequel
 
         if values.length != order.length
           raise Error, "passed the wrong number of values in the :#{from ? 'from' : 'after'} option to seek_paginate"
+        end
+
+        if not_null.nil?
+          not_null = []
+
+          if @model
+            @model.db_schema.each do |column, schema|
+              not_null << column if schema[:allow_null] == false
+            end
+          end
         end
 
         OrderedColumnSet.new(order.zip(values), include_value: !!from, not_null: not_null).apply(ds)

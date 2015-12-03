@@ -20,6 +20,9 @@ DB.create_table :seek do
   integer :nullable_2
 end
 
+class SeekModel < Sequel::Model(:seek)
+end
+
 DB.run <<-SQL
   INSERT INTO seek
     (not_nullable_1, not_nullable_2, nullable_1, nullable_2)
