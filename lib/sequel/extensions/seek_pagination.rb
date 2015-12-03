@@ -5,8 +5,9 @@ module Sequel
   module SeekPagination
     class Error < StandardError; end
 
-    def seek_paginate(count, from: nil, after: nil, not_null: nil)
+    def seek_paginate(count, from: nil, after: nil, from_pk: nil, after_pk: nil, not_null: nil)
       order = opts[:order]
+      model = @model
 
       if order.nil? || order.length.zero?
         raise Error, "cannot seek_paginate on a dataset with no order"
@@ -28,8 +29,8 @@ module Sequel
 
           # If the dataset was chained off a model, use its stored schema
           # information to figure out what columns are not null.
-          if @model
-            @model.db_schema.each do |column, schema|
+          if model
+            model.db_schema.each do |column, schema|
               not_null << column if schema[:allow_null] == false
             end
           end

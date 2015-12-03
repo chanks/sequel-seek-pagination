@@ -65,6 +65,21 @@ class SeekPaginationSpec < Minitest::Spec
             assert_equal_results dataset.offset(offset + 1).limit(100),
                                  dataset.seek_paginate(100, after: values, not_null: [:id, :non_nullable_1, :non_nullable_2])
           end
+
+          if dataset_type == :model
+            it "should page properly when given a primary key to start from/after" do
+              skip
+
+              offset = rand(SEEK_COUNT)
+              id     = dataset.offset(offset).get(:id)
+
+              assert_equal_results dataset.offset(offset).limit(100),
+                                   dataset.seek_paginate(100, from_pk: id)
+
+              assert_equal_results dataset.offset(offset + 1).limit(100),
+                                   dataset.seek_paginate(100, after_pk: id)
+            end
+          end
         end
       end
     end
