@@ -36,9 +36,3 @@ The total number of pages isn't available (unless you do a count(*) yourself), a
 ### Caveats
 
 It's advisable for the column set you're sorting on to be unique, or else there's the risk that results will be duplicated if multiple rows have the same value across a page break. You may be able to get away with doing this on non-unique column sets if they have very high cardinality (for example, if one of the columns is a created_at timestamp that will rarely be repeated). If you need to enforce a unique column set to get a stable sort, you can always add a unique column to the end of the ordering.
-
-### TODO
-
-1. Support nullable columns (currently it is assumed that all columns never have null values).
-2. Support multiple columns in different directions (currently col1 ASC, col2 ASC or col1 DESC, col2 DESC are supported, but col1 ASC, col2 DESC is not).
-3. Respect NULLS FIRST/LAST ordering.
