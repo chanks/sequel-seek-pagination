@@ -23,6 +23,9 @@ class SeekPaginationSpec < Minitest::Spec
                   end
                 end
 
+      # Can't pass any random expression to #get, so give them all aliases.
+      gettable = columns.zip(:a..:z).map{|c,a| c.as(a)}
+
       it "should limit the dataset appropriately when a starting point is not given" do
         assert_equal_results dataset.limit(10),
                              dataset.seek_paginate(10)
@@ -30,7 +33,7 @@ class SeekPaginationSpec < Minitest::Spec
 
       it "should page properly when given a point to start from/after" do
         offset = rand(SEEK_COUNT)
-        values = dataset.offset(offset).get(columns)
+        values = dataset.offset(offset).get(gettable)
 
         assert_equal_results dataset.offset(offset).limit(100),
                              dataset.seek_paginate(100, from: values)
@@ -50,7 +53,7 @@ class SeekPaginationSpec < Minitest::Spec
 
       it "should return correct results when nullability information is provided" do
         offset = rand(SEEK_COUNT)
-        values = dataset.offset(offset).get(columns)
+        values = dataset.offset(offset).get(gettable)
 
         assert_equal_results dataset.offset(offset).limit(100),
                              dataset.seek_paginate(100, from: values, not_null: [:id, :non_nullable_1, :non_nullable_2])
@@ -112,6 +115,22 @@ class SeekPaginationSpec < Minitest::Spec
         [:not_nullable_2.asc, :not_nullable_2.desc],
         [:nullable_1.asc, :nullable_1.desc, :nullable_1.asc(nulls: :first), :nullable_1.desc(nulls: :last)],
         [:nullable_2.asc, :nullable_2.desc, :nullable_2.asc(nulls: :first), :nullable_2.desc(nulls: :last)],
+      ]
+
+      testing_columns = columns.sample(rand(columns.count) + 1).map(&:sample)
+      testing_columns << [:id.asc, :id.desc].sample
+
+      it_should_seek_paginate_properly(testing_columns)
+    end
+  end
+
+  describe "for ordering by a mix of expressions and columns" do
+    20.times do
+      columns = [
+        [:not_nullable_1.asc, :not_nullable_1.desc, (:not_nullable_1.sql_number % 10).asc, (:not_nullable_1.sql_number % 10).desc],
+        [:not_nullable_2.asc, :not_nullable_2.desc, (:not_nullable_2.sql_number % 10).asc, (:not_nullable_2.sql_number % 10).desc],
+        [:nullable_1.asc, :nullable_1.desc, :nullable_1.asc(nulls: :first), :nullable_1.desc(nulls: :last), (:nullable_1.sql_number % 10).asc, (:nullable_1.sql_number % 10).desc, (:nullable_1.sql_number % 10).asc(nulls: :first), (:nullable_1.sql_number % 10).desc(nulls: :last)],
+        [:nullable_2.asc, :nullable_2.desc, :nullable_2.asc(nulls: :first), :nullable_2.desc(nulls: :last), (:nullable_2.sql_number % 10).asc, (:nullable_2.sql_number % 10).desc, (:nullable_2.sql_number % 10).asc(nulls: :first), (:nullable_2.sql_number % 10).desc(nulls: :last)],
       ]
 
       testing_columns = columns.sample(rand(columns.count) + 1).map(&:sample)
