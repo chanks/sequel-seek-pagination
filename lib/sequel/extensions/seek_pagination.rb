@@ -19,19 +19,19 @@ module Sequel
 
       ds = limit(count)
 
-
-
       if values = from || after
         values = Array(values)
 
         if values.length != order.length
           raise Error, "passed the wrong number of values in the :#{from ? 'from' : 'after'} option to seek_paginate"
         end
-      end
-
-      if pk = from_pk || after_pk
+      elsif pk = from_pk || after_pk
+        # Need to load the order expressions for that pk from the DB.
         selections = order.map { |o| Sequel::SQL::OrderedExpression === o ? o.expression : o }
+
+        # #get won't like it if we pass it bare expressions, so give it aliases for everything.
         gettable = selections.zip(:a..:z).map{|s,a| Sequel.as(s, a)}
+
         values = where(model.qualified_primary_key_hash(pk)).get(gettable)
       end
 
