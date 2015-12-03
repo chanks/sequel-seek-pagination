@@ -14,7 +14,6 @@ class SeekPaginationSpec < Minitest::Spec
 
   class << self
     def it_should_seek_paginate_properly(ordering)
-      dataset = DB[:seek].order(*ordering)
       columns = ordering.map do |order|
                   case order
                   when Symbol then order
@@ -23,43 +22,50 @@ class SeekPaginationSpec < Minitest::Spec
                   end
                 end
 
-      # Can't pass any random expression to #get, so give them all aliases.
-      gettable = columns.zip(:a..:z).map{|c,a| c.as(a)}
+      [:plain, :model].each do |dataset_type|
+        describe "for a #{dataset_type} dataset" do
+          dataset = dataset_type == :plain ? DB[:seek] : SeekModel
+          dataset = dataset.order(*ordering)
 
-      it "should limit the dataset appropriately when a starting point is not given" do
-        assert_equal_results dataset.limit(10),
-                             dataset.seek_paginate(10)
-      end
+          # Can't pass any random expression to #get, so give them all aliases.
+          gettable = columns.zip(:a..:z).map{|c,a| c.as(a)}
 
-      it "should page properly when given a point to start from/after" do
-        offset = rand(SEEK_COUNT)
-        values = dataset.offset(offset).get(gettable)
+          it "should limit the dataset appropriately when a starting point is not given" do
+            assert_equal_results dataset.limit(10),
+                                 dataset.seek_paginate(10)
+          end
 
-        assert_equal_results dataset.offset(offset).limit(100),
-                             dataset.seek_paginate(100, from: values)
+          it "should page properly when given a point to start from/after" do
+            offset = rand(SEEK_COUNT)
+            values = dataset.offset(offset).get(gettable)
 
-        assert_equal_results dataset.offset(offset + 1).limit(100),
-                             dataset.seek_paginate(100, after: values)
+            assert_equal_results dataset.offset(offset).limit(100),
+                                 dataset.seek_paginate(100, from: values)
 
-        if columns.length == 1
-          # Should wrap values in an array if necessary
-          assert_equal_results dataset.offset(offset).limit(100),
-                               dataset.seek_paginate(100, from: values.first)
+            assert_equal_results dataset.offset(offset + 1).limit(100),
+                                 dataset.seek_paginate(100, after: values)
 
-          assert_equal_results dataset.offset(offset + 1).limit(100),
-                               dataset.seek_paginate(100, after: values.first)
+            if columns.length == 1
+              # Should wrap values in an array if necessary
+              assert_equal_results dataset.offset(offset).limit(100),
+                                   dataset.seek_paginate(100, from: values.first)
+
+              assert_equal_results dataset.offset(offset + 1).limit(100),
+                                   dataset.seek_paginate(100, after: values.first)
+            end
+          end
+
+          it "should return correct results when nullability information is provided" do
+            offset = rand(SEEK_COUNT)
+            values = dataset.offset(offset).get(gettable)
+
+            assert_equal_results dataset.offset(offset).limit(100),
+                                 dataset.seek_paginate(100, from: values, not_null: [:id, :non_nullable_1, :non_nullable_2])
+
+            assert_equal_results dataset.offset(offset + 1).limit(100),
+                                 dataset.seek_paginate(100, after: values, not_null: [:id, :non_nullable_1, :non_nullable_2])
+          end
         end
-      end
-
-      it "should return correct results when nullability information is provided" do
-        offset = rand(SEEK_COUNT)
-        values = dataset.offset(offset).get(gettable)
-
-        assert_equal_results dataset.offset(offset).limit(100),
-                             dataset.seek_paginate(100, from: values, not_null: [:id, :non_nullable_1, :non_nullable_2])
-
-        assert_equal_results dataset.offset(offset + 1).limit(100),
-                             dataset.seek_paginate(100, after: values, not_null: [:id, :non_nullable_1, :non_nullable_2])
       end
     end
   end
