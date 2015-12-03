@@ -26,6 +26,8 @@ module Sequel
         if not_null.nil?
           not_null = []
 
+          # If the dataset was chained off a model, use its stored schema
+          # information to figure out what columns are not null.
           if @model
             @model.db_schema.each do |column, schema|
               not_null << column if schema[:allow_null] == false
@@ -33,7 +35,9 @@ module Sequel
           end
         end
 
-        OrderedColumnSet.new(order.zip(values), include_value: !!from, not_null: not_null).apply(ds)
+        # If we're paginating with a :from value, we want to include the row
+        # that has those exact values.
+        OrderedColumnSet.new(order.zip(values), include_exact_match: !!from, not_null: not_null).apply(ds)
       else
         ds
       end
@@ -42,11 +46,11 @@ module Sequel
     private
 
     class OrderedColumnSet
-      attr_reader :not_null, :include_value, :orders
+      attr_reader :not_null, :include_exact_match, :orders
 
-      def initialize(order_values, include_value:, not_null:)
+      def initialize(order_values, include_exact_match:, not_null:)
         @not_null = not_null
-        @include_value = include_value
+        @include_exact_match = include_exact_match
         @orders = order_values.map { |order, value| OrderedColumn.new(self, order, value) }
       end
 
@@ -54,23 +58,24 @@ module Sequel
         length = orders.length
 
         conditions =
-          # Handle the common case where we can do WHERE (non_nullable_1, non_nullable_2) > (1, 2)
-          if length > 1 && has_uniform_order_direction? && orders.all?(&:not_null)
+          # Handle the common case where we can do a simpler (and faster)
+          # WHERE (non_nullable_1, non_nullable_2) > (1, 2) clause.
+          if length > 1 && orders.all?(&:not_null) && has_uniform_order_direction?
             method = orders.first.direction == :asc ? '>' : '<'
-            method << '='.freeze if include_value
+            method << '='.freeze if include_exact_match
             Sequel.virtual_row{|o| o.__send__(method, orders.map(&:name), orders.map(&:value))}
           else
             Sequel.&(
               *length.times.map { |i|
-                is_last = i == length - 1
+                allow_equal = include_exact_match || i != length - 1
                 conditions = orders[0..i]
 
                 if i.zero?
-                  conditions[0].ineq(eq: (include_value || !is_last))
+                  conditions[0].ineq(eq: allow_equal)
                 else
                   c = conditions[-2]
 
-                  list = if filter = conditions[-1].ineq(eq: (include_value || !is_last))
+                  list = if filter = conditions[-1].ineq(eq: allow_equal)
                            [Sequel.&(c.eq_filter, filter)]
                          else
                            [c.eq_filter]
@@ -150,6 +155,9 @@ module Sequel
 
       private
 
+      # By default, Postgres sorts NULLs as higher than any other value. So we
+      # can treat a plain column ASC as column ASC NULLS LAST, and a plain
+      # column DESC as column DESC NULLS FIRST.
       def default_nulls_option(direction)
         case direction
         when :asc  then :last
