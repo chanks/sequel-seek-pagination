@@ -7,6 +7,11 @@ class SeekPaginationSpec < Minitest::Spec
     assert_equal ds1.all, ds2.all
   end
 
+  def assert_error_message(message, &block)
+    error = assert_raises(Sequel::SeekPagination::Error, &block)
+    assert_equal message, error.message
+  end
+
   class << self
     def it_should_seek_paginate_properly(ordering)
       dataset = DB[:seek].order(*ordering)
@@ -141,16 +146,6 @@ class SeekPaginationSpec < Minitest::Spec
     end
   end
 
-  it "should be able to determine from the dataset model what columns are not null" do
-    assert_equal %(SELECT * FROM "seek" WHERE (("not_nullable_1", "not_nullable_2", "id") > (1, 2, 3)) ORDER BY "not_nullable_1", "not_nullable_2", "id" LIMIT 5),
-      SeekModel.order(:not_nullable_1, :not_nullable_2, :id).seek_paginate(5, after: [1, 2, 3]).sql
-  end
-
-  def assert_error_message(message, &block)
-    error = assert_raises(Sequel::SeekPagination::Error, &block)
-    assert_equal message, error.message
-  end
-
   it "should raise an error if the dataset is not ordered" do
     assert_error_message("cannot seek_paginate on a dataset with no order") { DB[:seek].seek_paginate(30) }
   end
@@ -164,5 +159,12 @@ class SeekPaginationSpec < Minitest::Spec
     assert_error_message("passed the wrong number of values in the :after option to seek_paginate") { DB[:seek].order(:id, :nullable_1).seek_paginate(30, after: [3]) }
     assert_error_message("passed the wrong number of values in the :from option to seek_paginate")  { DB[:seek].order(:id, :nullable_1).seek_paginate(30, from:  [3, 4, 5]) }
     assert_error_message("passed the wrong number of values in the :after option to seek_paginate") { DB[:seek].order(:id, :nullable_1).seek_paginate(30, after: [3, 4, 5]) }
+  end
+
+  describe "when chained from a model" do
+    it "should be able to determine from the schema what columns are not null" do
+      assert_equal %(SELECT * FROM "seek" WHERE (("not_nullable_1", "not_nullable_2", "id") > (1, 2, 3)) ORDER BY "not_nullable_1", "not_nullable_2", "id" LIMIT 5),
+        SeekModel.order(:not_nullable_1, :not_nullable_2, :id).seek_paginate(5, after: [1, 2, 3]).sql
+    end
   end
 end
