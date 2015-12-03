@@ -2,8 +2,6 @@ require 'sequel'
 
 $: << File.join(File.dirname(__FILE__), '..', 'lib')
 
-Sequel.extension :core_extensions
-
 Sequel::Database.extension :seek_pagination
 
 DB = Sequel.connect "postgres:///sequel-seek-pagination-test"

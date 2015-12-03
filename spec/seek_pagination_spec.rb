@@ -27,7 +27,7 @@ class SeekPaginationSpec < Minitest::Spec
           dataset = dataset.order(*ordering)
 
           # Can't pass any random expression to #get, so give them all aliases.
-          gettable = columns.zip(:a..:z).map{|c,a| c.as(a)}
+          gettable = columns.zip(:a..:z).map{|c,a| Sequel.as(c, a)}
 
           it "should limit the dataset appropriately when a starting point is not given" do
             assert_equal_results dataset.limit(10),
@@ -83,23 +83,23 @@ class SeekPaginationSpec < Minitest::Spec
   end
 
   describe "for ordering by a single not-null column in either order" do
-    [:id.asc, :id.desc].each do |o1|
+    [Sequel.asc(:id), Sequel.desc(:id)].each do |o1|
       it_should_seek_paginate_properly [o1]
     end
   end
 
   describe "for ordering by two not-null columns in any order" do
-    [:not_nullable_1.asc, :not_nullable_1.desc].each do |o1|
-      [:id.asc, :id.desc].each do |o2|
+    [Sequel.asc(:not_nullable_1), Sequel.desc(:not_nullable_1)].each do |o1|
+      [Sequel.asc(:id), Sequel.desc(:id)].each do |o2|
         it_should_seek_paginate_properly [o1, o2]
       end
     end
   end
 
   describe "for ordering by three not-null columns in any order" do
-    [:not_nullable_1.asc, :not_nullable_1.desc].each do |o1|
-      [:not_nullable_2.asc, :not_nullable_2.desc].each do |o2|
-        [:id.asc, :id.desc].each do |o3|
+    [Sequel.asc(:not_nullable_1), Sequel.desc(:not_nullable_1)].each do |o1|
+      [Sequel.asc(:not_nullable_2), Sequel.desc(:not_nullable_2)].each do |o2|
+        [Sequel.asc(:id), Sequel.desc(:id)].each do |o3|
           it_should_seek_paginate_properly [o1, o2, o3]
         end
       end
@@ -108,8 +108,8 @@ class SeekPaginationSpec < Minitest::Spec
 
   describe "for ordering by a nullable column" do
     # We still tack on :id because the ordering needs to be unique.
-    [:nullable_1.asc, :nullable_1.desc, :nullable_1.asc(nulls: :first), :nullable_1.desc(nulls: :last)].each do |o1|
-      [:id.asc, :id.desc].each do |o2|
+    [Sequel.asc(:nullable_1), Sequel.desc(:nullable_1), Sequel.asc(:nullable_1, nulls: :first), Sequel.desc(:nullable_1, nulls: :last)].each do |o1|
+      [Sequel.asc(:id), Sequel.desc(:id)].each do |o2|
         it_should_seek_paginate_properly [o1, o2]
       end
     end
@@ -117,9 +117,9 @@ class SeekPaginationSpec < Minitest::Spec
 
   describe "for ordering by multiple nullable columns" do
     # We still tack on :id because the ordering needs to be unique.
-    [:nullable_1.asc, :nullable_1.desc, :nullable_1.asc(nulls: :first), :nullable_1.desc(nulls: :last)].each do |o1|
-      [:nullable_2.asc, :nullable_2.desc, :nullable_2.asc(nulls: :first), :nullable_2.desc(nulls: :last)].each do |o2|
-        [:id.asc, :id.desc].each do |o3|
+    [Sequel.asc(:nullable_1), Sequel.desc(:nullable_1), Sequel.asc(:nullable_1, nulls: :first), Sequel.desc(:nullable_1, nulls: :last)].each do |o1|
+      [Sequel.asc(:nullable_2), Sequel.desc(:nullable_2), Sequel.asc(:nullable_2, nulls: :first), Sequel.desc(:nullable_2, nulls: :last)].each do |o2|
+        [Sequel.asc(:id), Sequel.desc(:id)].each do |o3|
           it_should_seek_paginate_properly [o1, o2, o3]
         end
       end
@@ -129,14 +129,14 @@ class SeekPaginationSpec < Minitest::Spec
   describe "for ordering by a mix of nullable and not-nullable columns" do
     20.times do
       columns = [
-        [:not_nullable_1, :not_nullable_1.asc, :not_nullable_1.desc],
-        [:not_nullable_2, :not_nullable_2.asc, :not_nullable_2.desc],
-        [:nullable_1, :nullable_1.asc, :nullable_1.desc, :nullable_1.asc(nulls: :first), :nullable_1.desc(nulls: :last)],
-        [:nullable_2, :nullable_2.asc, :nullable_2.desc, :nullable_2.asc(nulls: :first), :nullable_2.desc(nulls: :last)],
+        [:not_nullable_1, Sequel.asc(:not_nullable_1), Sequel.desc(:not_nullable_1)],
+        [:not_nullable_2, Sequel.asc(:not_nullable_2), Sequel.desc(:not_nullable_2)],
+        [:nullable_1, Sequel.asc(:nullable_1), Sequel.desc(:nullable_1), Sequel.asc(:nullable_1, nulls: :first), Sequel.desc(:nullable_1, nulls: :last)],
+        [:nullable_2, Sequel.asc(:nullable_2), Sequel.desc(:nullable_2), Sequel.asc(:nullable_2, nulls: :first), Sequel.desc(:nullable_2, nulls: :last)],
       ]
 
       testing_columns = columns.sample(rand(columns.count) + 1).map(&:sample)
-      testing_columns << [:id, :id.asc, :id.desc].sample
+      testing_columns << [:id, Sequel.asc(:id), Sequel.desc(:id)].sample
 
       it_should_seek_paginate_properly(testing_columns)
     end
@@ -145,14 +145,14 @@ class SeekPaginationSpec < Minitest::Spec
   describe "for ordering by a mix of expressions and columns" do
     20.times do
       columns = [
-        [:not_nullable_1, :not_nullable_1.asc, :not_nullable_1.desc, :not_nullable_1.sql_number % 10, (:not_nullable_1.sql_number % 10).asc, (:not_nullable_1.sql_number % 10).desc],
-        [:not_nullable_2, :not_nullable_2.asc, :not_nullable_2.desc, :not_nullable_2.sql_number % 10, (:not_nullable_2.sql_number % 10).asc, (:not_nullable_2.sql_number % 10).desc],
-        [:nullable_1, :nullable_1.asc, :nullable_1.desc, :nullable_1.asc(nulls: :first), :nullable_1.desc(nulls: :last), :nullable_1.sql_number % 10, (:nullable_1.sql_number % 10).asc, (:nullable_1.sql_number % 10).desc, (:nullable_1.sql_number % 10).asc(nulls: :first), (:nullable_1.sql_number % 10).desc(nulls: :last)],
-        [:nullable_2, :nullable_2.asc, :nullable_2.desc, :nullable_2.asc(nulls: :first), :nullable_2.desc(nulls: :last), :nullable_2.sql_number % 10, (:nullable_2.sql_number % 10).asc, (:nullable_2.sql_number % 10).desc, (:nullable_2.sql_number % 10).asc(nulls: :first), (:nullable_2.sql_number % 10).desc(nulls: :last)],
+        [:not_nullable_1, Sequel.asc(:not_nullable_1), Sequel.desc(:not_nullable_1), Sequel.expr(:not_nullable_1).sql_number % 10, Sequel.asc(Sequel.expr(:not_nullable_1).sql_number % 10), Sequel.desc(Sequel.expr(:not_nullable_1).sql_number % 10)],
+        [:not_nullable_2, Sequel.asc(:not_nullable_2), Sequel.desc(:not_nullable_2), Sequel.expr(:not_nullable_2).sql_number % 10, Sequel.asc(Sequel.expr(:not_nullable_2).sql_number % 10), Sequel.desc(Sequel.expr(:not_nullable_2).sql_number % 10)],
+        [:nullable_1, Sequel.asc(:nullable_1), Sequel.desc(:nullable_1), Sequel.asc(:nullable_1, nulls: :first), Sequel.desc(:nullable_1, nulls: :last), Sequel.expr(:nullable_1).sql_number % 10, Sequel.asc(Sequel.expr(:nullable_1).sql_number % 10), (Sequel.expr(:nullable_1).sql_number % 10).desc, Sequel.asc(Sequel.expr(:nullable_1).sql_number % 10, nulls: :first), Sequel.desc(Sequel.expr(:nullable_1).sql_number % 10, nulls: :last)],
+        [:nullable_2, Sequel.asc(:nullable_2), Sequel.desc(:nullable_2), Sequel.asc(:nullable_2, nulls: :first), Sequel.desc(:nullable_2, nulls: :last), Sequel.expr(:nullable_2).sql_number % 10, Sequel.asc(Sequel.expr(:nullable_2).sql_number % 10), (Sequel.expr(:nullable_2).sql_number % 10).desc, Sequel.asc(Sequel.expr(:nullable_2).sql_number % 10, nulls: :first), Sequel.desc(Sequel.expr(:nullable_2).sql_number % 10, nulls: :last)],
       ]
 
       testing_columns = columns.sample(rand(columns.count) + 1).map(&:sample)
-      testing_columns << [:id, :id.asc, :id.desc].sample
+      testing_columns << [:id, Sequel.asc(:id), Sequel.desc(:id)].sample
 
       it_should_seek_paginate_properly(testing_columns)
     end
@@ -162,10 +162,10 @@ class SeekPaginationSpec < Minitest::Spec
     datasets = [
       DB[:seek].order(:id),
       DB[:seek].order(:seek__id),
-      DB[:seek].order(:id.asc),
-      DB[:seek].order(:seek__id.asc),
-      DB[:seek].order(:id.desc).reverse_order,
-      DB[:seek].order(:seek__id.desc).reverse_order,
+      DB[:seek].order(Sequel.asc(:id)),
+      DB[:seek].order(Sequel.asc(:seek__id)),
+      DB[:seek].order(Sequel.desc(:id)).reverse_order,
+      DB[:seek].order(Sequel.desc(:seek__id)).reverse_order,
     ]
 
     # With point to start from/after:
