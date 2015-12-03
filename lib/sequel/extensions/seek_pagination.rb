@@ -30,17 +30,7 @@ module Sequel
       end
 
       if pk = from_pk || after_pk
-        selections = order.map do |o|
-          case o
-          when Symbol
-            o
-          when Sequel::SQL::OrderedExpression
-            o.expression
-          else
-            raise "Unhandled order type!: #{o.class}"
-          end
-        end
-
+        selections = order.map { |o| Sequel::SQL::OrderedExpression === o ? o.expression : o }
         gettable = selections.zip(:a..:z).map{|s,a| Sequel.as(s, a)}
         values = where(model.qualified_primary_key_hash(pk)).get(gettable)
       end
@@ -135,14 +125,12 @@ module Sequel
         @value = value
         @name, @direction, @nulls =
           case order
-          when Symbol
-            [order, :asc, :last]
           when Sequel::SQL::OrderedExpression
             direction = order.descending ? :desc : :asc
             nulls = order.nulls || default_nulls_option(direction)
             [order.expression, direction, nulls]
           else
-            raise "Unrecognized order!: #{order.inspect}"
+            [order, :asc, :last]
           end
 
         @not_null = set.not_null.include?(@name)

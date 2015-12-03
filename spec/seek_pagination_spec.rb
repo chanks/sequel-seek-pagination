@@ -16,9 +16,8 @@ class SeekPaginationSpec < Minitest::Spec
     def it_should_seek_paginate_properly(ordering)
       columns = ordering.map do |order|
                   case order
-                  when Symbol then order
                   when Sequel::SQL::OrderedExpression then order.expression
-                  else raise "Bad order! #{order.inspect}"
+                  else order
                   end
                 end
 
@@ -130,14 +129,14 @@ class SeekPaginationSpec < Minitest::Spec
   describe "for ordering by a mix of nullable and not-nullable columns" do
     20.times do
       columns = [
-        [:not_nullable_1.asc, :not_nullable_1.desc],
-        [:not_nullable_2.asc, :not_nullable_2.desc],
-        [:nullable_1.asc, :nullable_1.desc, :nullable_1.asc(nulls: :first), :nullable_1.desc(nulls: :last)],
-        [:nullable_2.asc, :nullable_2.desc, :nullable_2.asc(nulls: :first), :nullable_2.desc(nulls: :last)],
+        [:not_nullable_1, :not_nullable_1.asc, :not_nullable_1.desc],
+        [:not_nullable_2, :not_nullable_2.asc, :not_nullable_2.desc],
+        [:nullable_1, :nullable_1.asc, :nullable_1.desc, :nullable_1.asc(nulls: :first), :nullable_1.desc(nulls: :last)],
+        [:nullable_2, :nullable_2.asc, :nullable_2.desc, :nullable_2.asc(nulls: :first), :nullable_2.desc(nulls: :last)],
       ]
 
       testing_columns = columns.sample(rand(columns.count) + 1).map(&:sample)
-      testing_columns << [:id.asc, :id.desc].sample
+      testing_columns << [:id, :id.asc, :id.desc].sample
 
       it_should_seek_paginate_properly(testing_columns)
     end
@@ -146,14 +145,14 @@ class SeekPaginationSpec < Minitest::Spec
   describe "for ordering by a mix of expressions and columns" do
     20.times do
       columns = [
-        [:not_nullable_1.asc, :not_nullable_1.desc, (:not_nullable_1.sql_number % 10).asc, (:not_nullable_1.sql_number % 10).desc],
-        [:not_nullable_2.asc, :not_nullable_2.desc, (:not_nullable_2.sql_number % 10).asc, (:not_nullable_2.sql_number % 10).desc],
-        [:nullable_1.asc, :nullable_1.desc, :nullable_1.asc(nulls: :first), :nullable_1.desc(nulls: :last), (:nullable_1.sql_number % 10).asc, (:nullable_1.sql_number % 10).desc, (:nullable_1.sql_number % 10).asc(nulls: :first), (:nullable_1.sql_number % 10).desc(nulls: :last)],
-        [:nullable_2.asc, :nullable_2.desc, :nullable_2.asc(nulls: :first), :nullable_2.desc(nulls: :last), (:nullable_2.sql_number % 10).asc, (:nullable_2.sql_number % 10).desc, (:nullable_2.sql_number % 10).asc(nulls: :first), (:nullable_2.sql_number % 10).desc(nulls: :last)],
+        [:not_nullable_1, :not_nullable_1.asc, :not_nullable_1.desc, :not_nullable_1.sql_number % 10, (:not_nullable_1.sql_number % 10).asc, (:not_nullable_1.sql_number % 10).desc],
+        [:not_nullable_2, :not_nullable_2.asc, :not_nullable_2.desc, :not_nullable_2.sql_number % 10, (:not_nullable_2.sql_number % 10).asc, (:not_nullable_2.sql_number % 10).desc],
+        [:nullable_1, :nullable_1.asc, :nullable_1.desc, :nullable_1.asc(nulls: :first), :nullable_1.desc(nulls: :last), :nullable_1.sql_number % 10, (:nullable_1.sql_number % 10).asc, (:nullable_1.sql_number % 10).desc, (:nullable_1.sql_number % 10).asc(nulls: :first), (:nullable_1.sql_number % 10).desc(nulls: :last)],
+        [:nullable_2, :nullable_2.asc, :nullable_2.desc, :nullable_2.asc(nulls: :first), :nullable_2.desc(nulls: :last), :nullable_2.sql_number % 10, (:nullable_2.sql_number % 10).asc, (:nullable_2.sql_number % 10).desc, (:nullable_2.sql_number % 10).asc(nulls: :first), (:nullable_2.sql_number % 10).desc(nulls: :last)],
       ]
 
       testing_columns = columns.sample(rand(columns.count) + 1).map(&:sample)
-      testing_columns << [:id.asc, :id.desc].sample
+      testing_columns << [:id, :id.asc, :id.desc].sample
 
       it_should_seek_paginate_properly(testing_columns)
     end
