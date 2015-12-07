@@ -187,8 +187,11 @@ class SeekPaginationSpec < Minitest::Spec
     assert_error_message("cannot seek_paginate on a dataset with no order") { DB[:seek].seek_paginate(30) }
   end
 
-  it "should raise an error if the dataset is not ordered" do
-    assert_error_message("cannot pass both :from and :after params to seek_paginate") { DB[:seek].order(:id).seek_paginate(30, from: 3, after: 4) }
+  it "should raise an error if more than one location argument is passed to seek_paginate" do
+    assert_error_message("cannot pass more than one of the :from, :after, :from_pk and :after_pk arguments to seek_paginate") { DB[:seek].order(:id).seek_paginate(30, from: 3, after: 4) }
+    assert_error_message("cannot pass more than one of the :from, :after, :from_pk and :after_pk arguments to seek_paginate") { DB[:seek].order(:id).seek_paginate(30, from_pk: 3, after_pk: 4) }
+    assert_error_message("cannot pass more than one of the :from, :after, :from_pk and :after_pk arguments to seek_paginate") { DB[:seek].order(:id).seek_paginate(30, from: 3, after_pk: 4) }
+    assert_error_message("cannot pass more than one of the :from, :after, :from_pk and :after_pk arguments to seek_paginate") { DB[:seek].order(:id).seek_paginate(30, from_pk: 3, after: 4) }
   end
 
   it "should raise an error if given the wrong number of values to from or after" do
