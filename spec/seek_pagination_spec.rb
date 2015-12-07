@@ -211,5 +211,10 @@ class SeekPaginationSpec < Minitest::Spec
       assert_equal %(SELECT * FROM "seek" WHERE (("not_nullable_1", "not_nullable_2", "id") > (1, 2, 3)) ORDER BY "not_nullable_1", "not_nullable_2", "id" LIMIT 5),
         SeekModel.order(:not_nullable_1, :not_nullable_2, :id).seek_paginate(5, after: [1, 2, 3]).sql
     end
+
+    it "should raise an error when passed a pk for a record that doesn't exist in the dataset" do
+      assert_raises(Sequel::NoMatchingRow) { SeekModel.order(:id).seek_paginate(5, after_pk: -45) }
+      assert_raises(Sequel::NoMatchingRow) { SeekModel.order(:id).seek_paginate(5, from_pk:  -45) }
+    end
   end
 end

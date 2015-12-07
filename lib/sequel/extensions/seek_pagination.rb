@@ -26,6 +26,8 @@ module Sequel
           raise Error, "passed the wrong number of values in the :#{from ? 'from' : 'after'} option to seek_paginate"
         end
       elsif pk = from_pk || after_pk
+        target_ds = where(model.qualified_primary_key_hash(pk))
+
         # Need to load the values to order from for that pk from the DB, so we
         # need to fetch the actual expressions being ordered by.
         expressions = order.map { |o| Sequel::SQL::OrderedExpression === o ? o.expression : o }
@@ -35,7 +37,9 @@ module Sequel
         al = :a
         gettable = expressions.map.with_index{|s,i| Sequel.as(s, (al = al.next))}
 
-        values = where(model.qualified_primary_key_hash(pk)).get(gettable)
+        unless values = target_ds.get(gettable)
+          raise NoMatchingRow.new(target_ds)
+        end
       end
 
       if values
