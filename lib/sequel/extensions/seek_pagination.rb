@@ -29,13 +29,14 @@ module Sequel
         target_ds = where(model.qualified_primary_key_hash(pk))
 
         # Need to load the values to order from for that pk from the DB, so we
-        # need to fetch the actual expressions being ordered by.
-        expressions = order.map { |o| Sequel::SQL::OrderedExpression === o ? o.expression : o }
-
+        # need to fetch the actual expressions being ordered by. Also,
         # Dataset#get won't like it if we pass it expressions that aren't
-        # simple columns, so give it aliases for everything.
+        # simple columns, so we need to give it aliases for everything.
         al = :a
-        gettable = expressions.map.with_index{|s,i| Sequel.as(s, (al = al.next))}
+        gettable = order.map do |o, i|
+          expression = Sequel::SQL::OrderedExpression === o ? o.expression : o
+          Sequel.as(expression, (al = al.next))
+        end
 
         unless values = target_ds.get(gettable)
           raise NoMatchingRow.new(target_ds)
