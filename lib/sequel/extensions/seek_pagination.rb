@@ -77,9 +77,13 @@ module Sequel
           # Handle the common case where we can do a simpler (and faster)
           # WHERE (non_nullable_1, non_nullable_2) > (1, 2) clause.
           if length > 1 && orders.all?(&:not_null) && has_uniform_order_direction?
-            method = orders.first.direction == :asc ? '>' : '<'
-            method << '='.freeze if include_exact_match
-            Sequel.virtual_row{|o| o.__send__(method, orders.map(&:name), orders.map(&:value))}
+            Sequel.virtual_row do |o|
+              o.__send__(
+                orders.first.inequality_method(include_exact_match),
+                orders.map(&:name),
+                orders.map(&:value)
+              )
+            end
           else
             Sequel.&(
               *length.times.map { |i|
@@ -151,12 +155,11 @@ module Sequel
         {name => nil}
       end
 
-      def ineq(eq: true)
+      def ineq(eq:)
         nulls_upcoming = !not_null && nulls == :last
 
         if !value.nil?
-          method = "#{direction == :asc ? '>' : '<'}#{'=' if eq}"
-          filter = Sequel.virtual_row{|o| o.__send__(method, name, value)}
+          filter = Sequel.virtual_row{|o| o.__send__(inequality_method(eq), name, value)}
           nulls_upcoming ? Sequel.|(filter, null_filter) : filter
         else
           if nulls_upcoming && eq
@@ -164,6 +167,14 @@ module Sequel
           elsif !nulls_upcoming && !eq
             Sequel.~(null_filter)
           end
+        end
+      end
+
+      def inequality_method(eq)
+        case direction
+        when :asc  then eq ? :>= : :>
+        when :desc then eq ? :<= : :<
+        else raise "Bad direction: #{direction.inspect}"
         end
       end
 
