@@ -13,16 +13,19 @@ DB.extension :seek_pagination
 ds = DB[:seek]
 ds.extension(:seek_pagination)
 
-# Use the new Dataset#seek_paginate method to get the first page.
-DB[:seek].order(:id).seek_paginate(50) # SELECT * FROM "seek" ORDER BY "id" LIMIT 50
+# Get the first page.
+DB[:seek].order(:id).limit(50) # SELECT * FROM "seek" ORDER BY "id" LIMIT 50
 
 # Use the last data you saw to get the second page.
 # (suppose the id of the last row you got was 1456)
-DB[:seek].order(:id).seek_paginate(50, after: 1456) # SELECT * FROM "seek" WHERE ("id" > 1456) ORDER BY "id" LIMIT 50
+DB[:seek].order(:id).limit(50).seek(1456) # SELECT * FROM "seek" WHERE ("id" > 1456) ORDER BY "id" LIMIT 50
 
 # Also works when sorting by multiple columns.
-DB[:seek].order(:col1, :col2).seek_paginate(50) # SELECT * FROM "seek" ORDER BY "col1", "col2" LIMIT 50
-DB[:seek].order(:col1, :col2).seek_paginate(50, after: [12, 56]) # SELECT * FROM "seek" WHERE (("col1", "col2") > (12, 56)) ORDER BY "col1", "col2" LIMIT 50
+DB[:seek].order(:col1, :col2).limit(50).seek([12, 56]) # SELECT * FROM "seek" WHERE (("col1", "col2") > (12, 56)) ORDER BY "col1", "col2" LIMIT 50
+
+# Go backwards
+DB[:seek].order(:id).limit(50).seek(1406, back: true) # SELECT * FROM "seek" WHERE ("id" < 1) ORDER BY "id" DESC LIMIT 50
+
 ```
 
 ### Why Seek Pagination?
