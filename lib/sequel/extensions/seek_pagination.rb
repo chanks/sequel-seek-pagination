@@ -5,28 +5,19 @@ module Sequel
   module SeekPagination
     class Error < StandardError; end
 
-    def seek_paginate(count, from: nil, after: nil, from_pk: nil, after_pk: nil, not_null: nil)
-      order = opts[:order]
+    def seek(base, back: false, with_base: nil, by_pk: nil, not_null: nil)
       model = @model
+      ds    = back ? self.reverse : self
+      order = ds.opts[:order]
 
       if order.nil? || order.length.zero?
-        raise Error, "cannot seek_paginate on a dataset with no order"
-      elsif [from, after, from_pk, after_pk].compact.count > 1
-        raise Error, "cannot pass more than one of the :from, :after, :from_pk and :after_pk arguments to seek_paginate"
-      elsif model.nil? && (from_pk || after_pk)
-        raise Error, "passed the :#{from_pk ? 'from' : 'after'}_pk option to seek_paginate on a dataset that doesn't have an associated model"
+        raise Error, "cannot seek on a dataset with no order"
+      elsif model.nil? && by_pk
+        raise Error, "passed the :by_pk option to seek on a dataset that doesn't have an associated model"
       end
 
-      ds = limit(count)
-
-      if values = from || after
-        values = Array(values)
-
-        if values.length != order.length
-          raise Error, "passed the wrong number of values in the :#{from ? 'from' : 'after'} option to seek_paginate"
-        end
-      elsif pk = from_pk || after_pk
-        target_ds = where(model.qualified_primary_key_hash(pk))
+      if by_pk
+        target_ds = where(model.qualified_primary_key_hash(base))
 
         # Need to load the values to order from for that pk from the DB, so we
         # need to fetch the actual expressions being ordered by. Also,
@@ -38,30 +29,31 @@ module Sequel
           Sequel.as(expression, (al = al.next))
         end
 
-        unless values = target_ds.get(gettable)
-          raise NoMatchingRow.new(target_ds)
+        values = target_ds.get(gettable)
+        raise NoMatchingRow.new(target_ds) unless values
+      else
+        values = Array(base)
+
+        if values.length != order.length
+          raise Error, "passed the wrong number of values to seek"
         end
       end
 
-      if values
-        if not_null.nil?
-          not_null = []
+      if not_null.nil?
+        not_null = []
 
-          # If the dataset was chained off a model, use its stored schema
-          # information to figure out what columns are not null.
-          if model
-            model.db_schema.each do |column, schema|
-              not_null << column if schema[:allow_null] == false
-            end
+        # If the dataset was chained off a model, use its stored schema
+        # information to figure out what columns are not null.
+        if model
+          model.db_schema.each do |column, schema|
+            not_null << column if schema[:allow_null] == false
           end
         end
-
-        # If we're paginating with a :from value, we want to include the row
-        # that has those exact values.
-        OrderedColumnSet.new(order.zip(values), include_exact_match: !!(from || from_pk), not_null: not_null).apply(ds)
-      else
-        ds
       end
+
+      # If we're paginating with a :with_base true, we want to include the row
+      # that has those exact values.
+      OrderedColumnSet.new(order.zip(values), include_exact_match: with_base, not_null: not_null).apply(ds)
     end
 
     private
