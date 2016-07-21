@@ -24,39 +24,28 @@ class SeekPaginationSpec < Minitest::Spec
       [:plain, :model].each do |dataset_type|
         describe "for a #{dataset_type} dataset" do
           dataset = dataset_type == :plain ? DB[:seek] : SeekModel
-          dataset = dataset.order(*ordering)
+          dataset = dataset.order(*ordering).limit(100)
 
           # Can't pass any random expression to #get, so give them all aliases.
           gettable = columns.zip(:a..:z).map{|c,a| Sequel.as(c, a)}
-
-          it "should limit the dataset appropriately when a starting point is not given" do
-            assert_equal_results dataset.limit(10),
-                                 dataset.seek_paginate(10)
-          end
 
           it "should page properly when given a point to start from/after" do
             offset = rand(SEEK_COUNT)
             values = dataset.offset(offset).get(gettable)
 
-            assert_equal_results dataset.offset(offset).limit(100),
-                                 dataset.seek_paginate(100, from: values)
+            assert_equal_results dataset.offset(offset),
+                                 dataset.seek(values, include_exact_match: true)
 
-            assert_equal_results dataset.offset(offset + 1).limit(100),
-                                 dataset.seek_paginate(100, after: values)
-
-            assert_equal_results dataset.offset(offset).limit(100),
-                                 dataset.limit(100).seek(from: values)
-
-            assert_equal_results dataset.offset(offset + 1).limit(100),
-                                 dataset.limit(100).seek(after: values)
+            assert_equal_results dataset.offset(offset + 1),
+                                 dataset.seek(values)
 
             if columns.length == 1
               # Should wrap values in an array if necessary
-              assert_equal_results dataset.offset(offset).limit(100),
-                                   dataset.seek_paginate(100, from: values.first)
+              assert_equal_results dataset.offset(offset),
+                                   dataset.seek(values.first, include_exact_match: true)
 
-              assert_equal_results dataset.offset(offset + 1).limit(100),
-                                   dataset.seek_paginate(100, after: values.first)
+              assert_equal_results dataset.offset(offset + 1),
+                                   dataset.seek(values.first)
             end
           end
 
@@ -64,11 +53,11 @@ class SeekPaginationSpec < Minitest::Spec
             offset = rand(SEEK_COUNT)
             values = dataset.offset(offset).get(gettable)
 
-            assert_equal_results dataset.offset(offset).limit(100),
-                                 dataset.seek_paginate(100, from: values, not_null: [:id, :non_nullable_1, :non_nullable_2])
+            assert_equal_results dataset.offset(offset),
+                                 dataset.seek(values, include_exact_match: true, not_null: [:id, :non_nullable_1, :non_nullable_2])
 
-            assert_equal_results dataset.offset(offset + 1).limit(100),
-                                 dataset.seek_paginate(100, after: values, not_null: [:id, :non_nullable_1, :non_nullable_2])
+            assert_equal_results dataset.offset(offset + 1),
+                                 dataset.seek(values, not_null: [:id, :non_nullable_1, :non_nullable_2])
           end
 
           if dataset_type == :model
@@ -76,11 +65,11 @@ class SeekPaginationSpec < Minitest::Spec
               offset = rand(SEEK_COUNT)
               id     = dataset.offset(offset).get(:id)
 
-              assert_equal_results dataset.offset(offset).limit(100),
-                                   dataset.seek_paginate(100, from_pk: id)
+              assert_equal_results dataset.offset(offset),
+                                   dataset.seek(id, pk: true, include_exact_match: true)
 
-              assert_equal_results dataset.offset(offset + 1).limit(100),
-                                   dataset.seek_paginate(100, after_pk: id)
+              assert_equal_results dataset.offset(offset + 1),
+                                   dataset.seek(id, pk: true)
             end
           end
         end
@@ -178,50 +167,36 @@ class SeekPaginationSpec < Minitest::Spec
     id = DB[:seek].order(:id).offset(56).get(:id)
 
     datasets.each do |dataset|
-      assert_equal_results DB[:seek].order(:id).limit(5),
-                           dataset.seek_paginate(5)
-
       assert_equal_results DB[:seek].order(:id).offset(56).limit(5),
-                           dataset.seek_paginate(5, from: id)
+                           dataset.limit(5).seek(id, include_exact_match: true)
 
       assert_equal_results DB[:seek].order(:id).offset(57).limit(5),
-                           dataset.seek_paginate(5, after: id)
+                           dataset.limit(5).seek(id)
     end
   end
 
   it "should raise an error if the dataset is not ordered" do
-    assert_error_message("cannot seek on a dataset with no order") { DB[:seek].seek(after: 3) }
+    assert_error_message("cannot seek on a dataset with no order") { DB[:seek].seek(3) }
   end
 
-  it "should raise an error if an incorrect number of location arguments are passed to seek" do
-    assert_error_message("must pass exactly one of the :from, :after, :from_pk and :after_pk arguments to #seek") { DB[:seek].order(:id).seek }
-    assert_error_message("must pass exactly one of the :from, :after, :from_pk and :after_pk arguments to #seek") { DB[:seek].order(:id).seek(from: 3, after: 4) }
-    assert_error_message("must pass exactly one of the :from, :after, :from_pk and :after_pk arguments to #seek") { DB[:seek].order(:id).seek(from_pk: 3, after_pk: 4) }
-    assert_error_message("must pass exactly one of the :from, :after, :from_pk and :after_pk arguments to #seek") { DB[:seek].order(:id).seek(from: 3, after_pk: 4) }
-    assert_error_message("must pass exactly one of the :from, :after, :from_pk and :after_pk arguments to #seek") { DB[:seek].order(:id).seek(from_pk: 3, after: 4) }
-  end
-
-  it "should raise an error if given the wrong number of values to from or after" do
-    assert_error_message("passed the wrong number of values in the :from option to #seek")  { DB[:seek].order(:id, :nullable_1).seek(from:  [3]) }
-    assert_error_message("passed the wrong number of values in the :after option to #seek") { DB[:seek].order(:id, :nullable_1).seek(after: [3]) }
-    assert_error_message("passed the wrong number of values in the :from option to #seek")  { DB[:seek].order(:id, :nullable_1).seek(from:  [3, 4, 5]) }
-    assert_error_message("passed the wrong number of values in the :after option to #seek") { DB[:seek].order(:id, :nullable_1).seek(after: [3, 4, 5]) }
+  it "should raise an error if given the wrong number of values" do
+    assert_error_message("passed the wrong number of values to #seek") { DB[:seek].order(:id, :nullable_1).seek(3) }
+    assert_error_message("passed the wrong number of values to #seek") { DB[:seek].order(:id, :nullable_1).seek([3]) }
+    assert_error_message("passed the wrong number of values to #seek") { DB[:seek].order(:id, :nullable_1).seek([3, 4, 5]) }
   end
 
   it "should raise an error if from_pk or after_pk are passed to a dataset without an associated model" do
-    assert_error_message("passed the :from_pk option to #seek on a dataset that doesn't have an associated model") { DB[:seek].order(:id, :nullable_1).seek(from_pk: 3) }
-    assert_error_message("passed the :after_pk option to #seek on a dataset that doesn't have an associated model") { DB[:seek].order(:id, :nullable_1).seek(after_pk: 3) }
+    assert_error_message("attempted a pk lookup on a dataset that doesn't have an associated model") { DB[:seek].order(:id, :nullable_1).seek(3, pk: true) }
   end
 
   describe "when chained from a model" do
     it "should be able to determine from the schema what columns are not null" do
       assert_equal %(SELECT * FROM "seek" WHERE (("not_nullable_1", "not_nullable_2", "id") > (1, 2, 3)) ORDER BY "not_nullable_1", "not_nullable_2", "id" LIMIT 5),
-        SeekModel.order(:not_nullable_1, :not_nullable_2, :id).seek(after: [1, 2, 3]).limit(5).sql
+        SeekModel.order(:not_nullable_1, :not_nullable_2, :id).seek([1, 2, 3]).limit(5).sql
     end
 
     it "should raise an error when passed a pk for a record that doesn't exist in the dataset" do
-      assert_raises(Sequel::NoMatchingRow) { SeekModel.order(:id).seek(after_pk: -45) }
-      assert_raises(Sequel::NoMatchingRow) { SeekModel.order(:id).seek(from_pk:  -45) }
+      assert_raises(Sequel::NoMatchingRow) { SeekModel.order(:id).seek(-45, pk: true) }
     end
   end
 end
