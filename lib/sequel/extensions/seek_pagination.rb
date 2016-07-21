@@ -12,9 +12,9 @@ module Sequel
       if !(value.nil? ^ pk.nil?)
         raise Error, "must pass exactly one of :value and :pk to #seek"
       elsif order.nil? || order.length.zero?
-        raise Error, "cannot seek on a dataset with no order"
+        raise Error, "cannot call #seek on a dataset with no order"
       elsif model.nil? && pk
-        raise Error, "attempted a pk lookup on a dataset that doesn't have an associated model"
+        raise Error, "attempted a primary key lookup on a dataset that doesn't have an associated model"
       end
 
       if pk

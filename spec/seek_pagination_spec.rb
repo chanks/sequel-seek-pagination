@@ -176,7 +176,7 @@ class SeekPaginationSpec < Minitest::Spec
   end
 
   it "should raise an error if the dataset is not ordered" do
-    assert_error_message("cannot seek on a dataset with no order") { DB[:seek].seek(value: 3) }
+    assert_error_message("cannot call #seek on a dataset with no order") { DB[:seek].seek(value: 3) }
   end
 
   it "should raise an error unless exactly one of :value and :pk is passed" do
@@ -191,7 +191,7 @@ class SeekPaginationSpec < Minitest::Spec
   end
 
   it "should raise an error if from_pk or after_pk are passed to a dataset without an associated model" do
-    assert_error_message("attempted a pk lookup on a dataset that doesn't have an associated model") { DB[:seek].order(:id, :nullable_1).seek(pk: 3) }
+    assert_error_message("attempted a primary key lookup on a dataset that doesn't have an associated model") { DB[:seek].order(:id, :nullable_1).seek(pk: 3) }
   end
 
   describe "when chained from a model" do
