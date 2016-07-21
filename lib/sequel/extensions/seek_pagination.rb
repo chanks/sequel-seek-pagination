@@ -53,7 +53,11 @@ module Sequel
         end
       end
 
-      OrderedColumnSet.new(order.zip(values), include_exact_match: include_exact_match, not_null: not_null).apply(self)
+      OrderedColumnSet.new(
+        order.zip(values),
+        include_exact_match: include_exact_match,
+        not_null: not_null
+      ).apply(self)
     end
 
     private
@@ -84,21 +88,21 @@ module Sequel
           else
             Sequel.&(
               *length.times.map { |i|
-                allow_equal = include_exact_match || i != length - 1
+                allow_equal = include_exact_match || i != (length - 1)
                 conditions = orders[0..i]
 
                 if i.zero?
-                  conditions[0].ineq(eq: allow_equal)
+                  conditions[0].inequality_condition(allow_equal: allow_equal)
                 else
                   c = conditions[-2]
 
-                  list = if filter = conditions[-1].ineq(eq: allow_equal)
+                  list = if filter = conditions[-1].inequality_condition(allow_equal: allow_equal)
                            [Sequel.&(c.eq_filter, filter)]
                          else
                            [c.eq_filter]
                          end
 
-                  list += conditions[0..-2].map { |c| c.ineq(eq: false) }
+                  list += conditions[0..-2].map { |c| c.inequality_condition(allow_equal: false) }
 
                   Sequel.|(*list.compact)
                 end
@@ -152,25 +156,34 @@ module Sequel
         {name => nil}
       end
 
-      def ineq(eq:)
+      def inequality_condition(allow_equal:)
         nulls_upcoming = !not_null && nulls == :last
 
-        if !value.nil?
-          filter = Sequel.virtual_row{|o| o.__send__(inequality_method(eq), name, value)}
-          nulls_upcoming ? Sequel.|(filter, null_filter) : filter
-        else
-          if nulls_upcoming && eq
+        if value.nil?
+          if nulls_upcoming && allow_equal
             null_filter
-          elsif !nulls_upcoming && !eq
+          elsif !nulls_upcoming && !allow_equal
             Sequel.~(null_filter)
+          else
+            # No condition necessary.
+            nil
+          end
+        else
+          # Value is not null.
+          filter = Sequel.virtual_row { |o| o.__send__(inequality_method(allow_equal), name, value) }
+
+          if nulls_upcoming
+            Sequel.|(filter, null_filter)
+          else
+            filter
           end
         end
       end
 
-      def inequality_method(eq)
+      def inequality_method(allow_equal)
         case direction
-        when :asc  then eq ? :>= : :>
-        when :desc then eq ? :<= : :<
+        when :asc  then allow_equal ? :>= : :>
+        when :desc then allow_equal ? :<= : :<
         else raise "Bad direction: #{direction.inspect}"
         end
       end
