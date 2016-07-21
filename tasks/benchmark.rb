@@ -37,17 +37,17 @@ task :benchmark do
   DB.add_index :seek, [:non_nullable_1]
 
   {
-    "1 column, not-null, ascending, no not-null information"  => DB[:seek].order(:id.asc ).seek_paginate(30, after: rand(RECORD_COUNT) + 1),
-    "1 column, not-null, descending, no not-null information" => DB[:seek].order(:id.desc).seek_paginate(30, after: rand(RECORD_COUNT) + 1),
+    "1 column, not-null, ascending, no not-null information"  => DB[:seek].limit(30).order(:id.asc ).seek(value: rand(RECORD_COUNT) + 1),
+    "1 column, not-null, descending, no not-null information" => DB[:seek].limit(30).order(:id.desc).seek(value: rand(RECORD_COUNT) + 1),
 
-    "1 column, not-null, ascending, with not-null information"  => DB[:seek].order(:id.asc ).seek_paginate(30, after: rand(RECORD_COUNT) + 1, not_null: [:id, :not_nullable_1, :not_nullable_2]),
-    "1 column, not-null, descending, with not-null information" => DB[:seek].order(:id.desc).seek_paginate(30, after: rand(RECORD_COUNT) + 1, not_null: [:id, :not_nullable_1, :not_nullable_2]),
+    "1 column, not-null, ascending, with not-null information"  => DB[:seek].limit(30).order(:id.asc ).seek(value: rand(RECORD_COUNT) + 1, not_null: [:id, :not_nullable_1, :not_nullable_2]),
+    "1 column, not-null, descending, with not-null information" => DB[:seek].limit(30).order(:id.desc).seek(value: rand(RECORD_COUNT) + 1, not_null: [:id, :not_nullable_1, :not_nullable_2]),
 
-    "2 columns, not-null, ascending, no not-null information"  => DB[:seek].order(:non_nullable_1.asc,  :id.asc ).seek_paginate(30, after: [5, rand(RECORD_COUNT) + 1]),
-    "2 columns, not-null, descending, no not-null information" => DB[:seek].order(:non_nullable_1.desc, :id.desc).seek_paginate(30, after: [5, rand(RECORD_COUNT) + 1]),
+    "2 columns, not-null, ascending, no not-null information"  => DB[:seek].limit(30).order(:non_nullable_1.asc,  :id.asc ).seek(value: [5, rand(RECORD_COUNT) + 1]),
+    "2 columns, not-null, descending, no not-null information" => DB[:seek].limit(30).order(:non_nullable_1.desc, :id.desc).seek(value: [5, rand(RECORD_COUNT) + 1]),
 
-    "2 columns, not-null, ascending, with not-null information"  => DB[:seek].order(:non_nullable_1.asc,  :id.asc ).seek_paginate(30, after: [5, rand(RECORD_COUNT) + 1], not_null: [:id, :non_nullable_1, :non_nullable_2]),
-    "2 columns, not-null, descending, with not-null information" => DB[:seek].order(:non_nullable_1.desc, :id.desc).seek_paginate(30, after: [5, rand(RECORD_COUNT) + 1], not_null: [:id, :non_nullable_1, :non_nullable_2]),
+    "2 columns, not-null, ascending, with not-null information"  => DB[:seek].limit(30).order(:non_nullable_1.asc,  :id.asc ).seek(value: [5, rand(RECORD_COUNT) + 1], not_null: [:id, :non_nullable_1, :non_nullable_2]),
+    "2 columns, not-null, descending, with not-null information" => DB[:seek].limit(30).order(:non_nullable_1.desc, :id.desc).seek(value: [5, rand(RECORD_COUNT) + 1], not_null: [:id, :non_nullable_1, :non_nullable_2]),
   }.each do |description, ds|
     puts
     puts description + ':'
