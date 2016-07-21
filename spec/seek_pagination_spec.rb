@@ -13,7 +13,7 @@ class SeekPaginationSpec < Minitest::Spec
   end
 
   class << self
-    def it_should_seek_paginate_properly(ordering)
+    def it_should_seek_properly(ordering)
       columns = ordering.map do |order|
                   case order
                   when Sequel::SQL::OrderedExpression then order.expression
@@ -43,6 +43,12 @@ class SeekPaginationSpec < Minitest::Spec
 
             assert_equal_results dataset.offset(offset + 1).limit(100),
                                  dataset.seek_paginate(100, after: values)
+
+            assert_equal_results dataset.offset(offset).limit(100),
+                                 dataset.limit(100).seek(from: values)
+
+            assert_equal_results dataset.offset(offset + 1).limit(100),
+                                 dataset.limit(100).seek(after: values)
 
             if columns.length == 1
               # Should wrap values in an array if necessary
@@ -84,14 +90,14 @@ class SeekPaginationSpec < Minitest::Spec
 
   describe "for ordering by a single not-null column in either order" do
     [Sequel.asc(:id), Sequel.desc(:id)].each do |o1|
-      it_should_seek_paginate_properly [o1]
+      it_should_seek_properly [o1]
     end
   end
 
   describe "for ordering by two not-null columns in any order" do
     [Sequel.asc(:not_nullable_1), Sequel.desc(:not_nullable_1)].each do |o1|
       [Sequel.asc(:id), Sequel.desc(:id)].each do |o2|
-        it_should_seek_paginate_properly [o1, o2]
+        it_should_seek_properly [o1, o2]
       end
     end
   end
@@ -100,7 +106,7 @@ class SeekPaginationSpec < Minitest::Spec
     [Sequel.asc(:not_nullable_1), Sequel.desc(:not_nullable_1)].each do |o1|
       [Sequel.asc(:not_nullable_2), Sequel.desc(:not_nullable_2)].each do |o2|
         [Sequel.asc(:id), Sequel.desc(:id)].each do |o3|
-          it_should_seek_paginate_properly [o1, o2, o3]
+          it_should_seek_properly [o1, o2, o3]
         end
       end
     end
@@ -110,7 +116,7 @@ class SeekPaginationSpec < Minitest::Spec
     # We still tack on :id because the ordering needs to be unique.
     [Sequel.asc(:nullable_1), Sequel.desc(:nullable_1), Sequel.asc(:nullable_1, nulls: :first), Sequel.desc(:nullable_1, nulls: :last)].each do |o1|
       [Sequel.asc(:id), Sequel.desc(:id)].each do |o2|
-        it_should_seek_paginate_properly [o1, o2]
+        it_should_seek_properly [o1, o2]
       end
     end
   end
@@ -120,7 +126,7 @@ class SeekPaginationSpec < Minitest::Spec
     [Sequel.asc(:nullable_1), Sequel.desc(:nullable_1), Sequel.asc(:nullable_1, nulls: :first), Sequel.desc(:nullable_1, nulls: :last)].each do |o1|
       [Sequel.asc(:nullable_2), Sequel.desc(:nullable_2), Sequel.asc(:nullable_2, nulls: :first), Sequel.desc(:nullable_2, nulls: :last)].each do |o2|
         [Sequel.asc(:id), Sequel.desc(:id)].each do |o3|
-          it_should_seek_paginate_properly [o1, o2, o3]
+          it_should_seek_properly [o1, o2, o3]
         end
       end
     end
@@ -138,7 +144,7 @@ class SeekPaginationSpec < Minitest::Spec
       testing_columns = columns.sample(rand(columns.count) + 1).map(&:sample)
       testing_columns << [:id, Sequel.asc(:id), Sequel.desc(:id)].sample
 
-      it_should_seek_paginate_properly(testing_columns)
+      it_should_seek_properly(testing_columns)
     end
   end
 
@@ -154,7 +160,7 @@ class SeekPaginationSpec < Minitest::Spec
       testing_columns = columns.sample(rand(columns.count) + 1).map(&:sample)
       testing_columns << [:id, Sequel.asc(:id), Sequel.desc(:id)].sample
 
-      it_should_seek_paginate_properly(testing_columns)
+      it_should_seek_properly(testing_columns)
     end
   end
 
@@ -184,37 +190,38 @@ class SeekPaginationSpec < Minitest::Spec
   end
 
   it "should raise an error if the dataset is not ordered" do
-    assert_error_message("cannot seek_paginate on a dataset with no order") { DB[:seek].seek_paginate(30) }
+    assert_error_message("cannot seek on a dataset with no order") { DB[:seek].seek(after: 3) }
   end
 
-  it "should raise an error if more than one location argument is passed to seek_paginate" do
-    assert_error_message("cannot pass more than one of the :from, :after, :from_pk and :after_pk arguments to seek_paginate") { DB[:seek].order(:id).seek_paginate(30, from: 3, after: 4) }
-    assert_error_message("cannot pass more than one of the :from, :after, :from_pk and :after_pk arguments to seek_paginate") { DB[:seek].order(:id).seek_paginate(30, from_pk: 3, after_pk: 4) }
-    assert_error_message("cannot pass more than one of the :from, :after, :from_pk and :after_pk arguments to seek_paginate") { DB[:seek].order(:id).seek_paginate(30, from: 3, after_pk: 4) }
-    assert_error_message("cannot pass more than one of the :from, :after, :from_pk and :after_pk arguments to seek_paginate") { DB[:seek].order(:id).seek_paginate(30, from_pk: 3, after: 4) }
+  it "should raise an error if an incorrect number of location arguments are passed to seek" do
+    assert_error_message("must pass exactly one of the :from, :after, :from_pk and :after_pk arguments to #seek") { DB[:seek].order(:id).seek }
+    assert_error_message("must pass exactly one of the :from, :after, :from_pk and :after_pk arguments to #seek") { DB[:seek].order(:id).seek(from: 3, after: 4) }
+    assert_error_message("must pass exactly one of the :from, :after, :from_pk and :after_pk arguments to #seek") { DB[:seek].order(:id).seek(from_pk: 3, after_pk: 4) }
+    assert_error_message("must pass exactly one of the :from, :after, :from_pk and :after_pk arguments to #seek") { DB[:seek].order(:id).seek(from: 3, after_pk: 4) }
+    assert_error_message("must pass exactly one of the :from, :after, :from_pk and :after_pk arguments to #seek") { DB[:seek].order(:id).seek(from_pk: 3, after: 4) }
   end
 
   it "should raise an error if given the wrong number of values to from or after" do
-    assert_error_message("passed the wrong number of values in the :from option to seek_paginate")  { DB[:seek].order(:id, :nullable_1).seek_paginate(30, from:  [3]) }
-    assert_error_message("passed the wrong number of values in the :after option to seek_paginate") { DB[:seek].order(:id, :nullable_1).seek_paginate(30, after: [3]) }
-    assert_error_message("passed the wrong number of values in the :from option to seek_paginate")  { DB[:seek].order(:id, :nullable_1).seek_paginate(30, from:  [3, 4, 5]) }
-    assert_error_message("passed the wrong number of values in the :after option to seek_paginate") { DB[:seek].order(:id, :nullable_1).seek_paginate(30, after: [3, 4, 5]) }
+    assert_error_message("passed the wrong number of values in the :from option to #seek")  { DB[:seek].order(:id, :nullable_1).seek(from:  [3]) }
+    assert_error_message("passed the wrong number of values in the :after option to #seek") { DB[:seek].order(:id, :nullable_1).seek(after: [3]) }
+    assert_error_message("passed the wrong number of values in the :from option to #seek")  { DB[:seek].order(:id, :nullable_1).seek(from:  [3, 4, 5]) }
+    assert_error_message("passed the wrong number of values in the :after option to #seek") { DB[:seek].order(:id, :nullable_1).seek(after: [3, 4, 5]) }
   end
 
   it "should raise an error if from_pk or after_pk are passed to a dataset without an associated model" do
-    assert_error_message("passed the :from_pk option to seek_paginate on a dataset that doesn't have an associated model") { DB[:seek].order(:id, :nullable_1).seek_paginate(30, from_pk: 3) }
-    assert_error_message("passed the :after_pk option to seek_paginate on a dataset that doesn't have an associated model") { DB[:seek].order(:id, :nullable_1).seek_paginate(30, after_pk: 3) }
+    assert_error_message("passed the :from_pk option to #seek on a dataset that doesn't have an associated model") { DB[:seek].order(:id, :nullable_1).seek(from_pk: 3) }
+    assert_error_message("passed the :after_pk option to #seek on a dataset that doesn't have an associated model") { DB[:seek].order(:id, :nullable_1).seek(after_pk: 3) }
   end
 
   describe "when chained from a model" do
     it "should be able to determine from the schema what columns are not null" do
       assert_equal %(SELECT * FROM "seek" WHERE (("not_nullable_1", "not_nullable_2", "id") > (1, 2, 3)) ORDER BY "not_nullable_1", "not_nullable_2", "id" LIMIT 5),
-        SeekModel.order(:not_nullable_1, :not_nullable_2, :id).seek_paginate(5, after: [1, 2, 3]).sql
+        SeekModel.order(:not_nullable_1, :not_nullable_2, :id).seek(after: [1, 2, 3]).limit(5).sql
     end
 
     it "should raise an error when passed a pk for a record that doesn't exist in the dataset" do
-      assert_raises(Sequel::NoMatchingRow) { SeekModel.order(:id).seek_paginate(5, after_pk: -45) }
-      assert_raises(Sequel::NoMatchingRow) { SeekModel.order(:id).seek_paginate(5, from_pk:  -45) }
+      assert_raises(Sequel::NoMatchingRow) { SeekModel.order(:id).seek(after_pk: -45) }
+      assert_raises(Sequel::NoMatchingRow) { SeekModel.order(:id).seek(from_pk:  -45) }
     end
   end
 end

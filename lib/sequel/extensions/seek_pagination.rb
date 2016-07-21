@@ -5,25 +5,33 @@ module Sequel
   module SeekPagination
     class Error < StandardError; end
 
-    def seek_paginate(count, from: nil, after: nil, from_pk: nil, after_pk: nil, not_null: nil)
+    def seek_paginate(count, **args)
+      ds = limit(count)
+
+      if args.any?
+        ds.seek(**args)
+      else
+        ds
+      end
+    end
+
+    def seek(from: nil, after: nil, from_pk: nil, after_pk: nil, not_null: nil)
       order = opts[:order]
       model = @model
 
       if order.nil? || order.length.zero?
-        raise Error, "cannot seek_paginate on a dataset with no order"
-      elsif [from, after, from_pk, after_pk].compact.count > 1
-        raise Error, "cannot pass more than one of the :from, :after, :from_pk and :after_pk arguments to seek_paginate"
+        raise Error, "cannot seek on a dataset with no order"
+      elsif [from, after, from_pk, after_pk].compact.count != 1
+        raise Error, "must pass exactly one of the :from, :after, :from_pk and :after_pk arguments to #seek"
       elsif model.nil? && (from_pk || after_pk)
-        raise Error, "passed the :#{from_pk ? 'from' : 'after'}_pk option to seek_paginate on a dataset that doesn't have an associated model"
+        raise Error, "passed the :#{from_pk ? 'from' : 'after'}_pk option to #seek on a dataset that doesn't have an associated model"
       end
-
-      ds = limit(count)
 
       if values = from || after
         values = Array(values)
 
         if values.length != order.length
-          raise Error, "passed the wrong number of values in the :#{from ? 'from' : 'after'} option to seek_paginate"
+          raise Error, "passed the wrong number of values in the :#{from ? 'from' : 'after'} option to #seek"
         end
       elsif pk = from_pk || after_pk
         target_ds = where(model.qualified_primary_key_hash(pk))
@@ -58,9 +66,9 @@ module Sequel
 
         # If we're paginating with a :from value, we want to include the row
         # that has those exact values.
-        OrderedColumnSet.new(order.zip(values), include_exact_match: !!(from || from_pk), not_null: not_null).apply(ds)
+        OrderedColumnSet.new(order.zip(values), include_exact_match: !!(from || from_pk), not_null: not_null).apply(self)
       else
-        ds
+        self
       end
     end
 
