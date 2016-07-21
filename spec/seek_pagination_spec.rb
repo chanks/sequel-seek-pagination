@@ -34,18 +34,18 @@ class SeekPaginationSpec < Minitest::Spec
             values = dataset.offset(offset).get(gettable)
 
             assert_equal_results dataset.offset(offset),
-                                 dataset.seek(values, include_exact_match: true)
+                                 dataset.seek(value: values, include_exact_match: true)
 
             assert_equal_results dataset.offset(offset + 1),
-                                 dataset.seek(values)
+                                 dataset.seek(value: values)
 
             if columns.length == 1
               # Should wrap values in an array if necessary
               assert_equal_results dataset.offset(offset),
-                                   dataset.seek(values.first, include_exact_match: true)
+                                   dataset.seek(value: values.first, include_exact_match: true)
 
               assert_equal_results dataset.offset(offset + 1),
-                                   dataset.seek(values.first)
+                                   dataset.seek(value: values.first)
             end
           end
 
@@ -54,10 +54,10 @@ class SeekPaginationSpec < Minitest::Spec
             values = dataset.offset(offset).get(gettable)
 
             assert_equal_results dataset.offset(offset),
-                                 dataset.seek(values, include_exact_match: true, not_null: [:id, :non_nullable_1, :non_nullable_2])
+                                 dataset.seek(value: values, include_exact_match: true, not_null: [:id, :non_nullable_1, :non_nullable_2])
 
             assert_equal_results dataset.offset(offset + 1),
-                                 dataset.seek(values, not_null: [:id, :non_nullable_1, :non_nullable_2])
+                                 dataset.seek(value: values, not_null: [:id, :non_nullable_1, :non_nullable_2])
           end
 
           if dataset_type == :model
@@ -66,10 +66,10 @@ class SeekPaginationSpec < Minitest::Spec
               id     = dataset.offset(offset).get(:id)
 
               assert_equal_results dataset.offset(offset),
-                                   dataset.seek(id, pk: true, include_exact_match: true)
+                                   dataset.seek(pk: id, include_exact_match: true)
 
               assert_equal_results dataset.offset(offset + 1),
-                                   dataset.seek(id, pk: true)
+                                   dataset.seek(pk: id)
             end
           end
         end
@@ -168,35 +168,40 @@ class SeekPaginationSpec < Minitest::Spec
 
     datasets.each do |dataset|
       assert_equal_results DB[:seek].order(:id).offset(56).limit(5),
-                           dataset.limit(5).seek(id, include_exact_match: true)
+                           dataset.limit(5).seek(value: id, include_exact_match: true)
 
       assert_equal_results DB[:seek].order(:id).offset(57).limit(5),
-                           dataset.limit(5).seek(id)
+                           dataset.limit(5).seek(value: id)
     end
   end
 
   it "should raise an error if the dataset is not ordered" do
-    assert_error_message("cannot seek on a dataset with no order") { DB[:seek].seek(3) }
+    assert_error_message("cannot seek on a dataset with no order") { DB[:seek].seek(value: 3) }
+  end
+
+  it "should raise an error unless exactly one of :value and :pk is passed" do
+    assert_error_message("must pass exactly one of :value and :pk to #seek") { DB[:seek].seek }
+    assert_error_message("must pass exactly one of :value and :pk to #seek") { DB[:seek].seek(value: 3, pk: 3) }
   end
 
   it "should raise an error if given the wrong number of values" do
-    assert_error_message("passed the wrong number of values to #seek") { DB[:seek].order(:id, :nullable_1).seek(3) }
-    assert_error_message("passed the wrong number of values to #seek") { DB[:seek].order(:id, :nullable_1).seek([3]) }
-    assert_error_message("passed the wrong number of values to #seek") { DB[:seek].order(:id, :nullable_1).seek([3, 4, 5]) }
+    assert_error_message("passed the wrong number of values to #seek") { DB[:seek].order(:id, :nullable_1).seek(value: 3) }
+    assert_error_message("passed the wrong number of values to #seek") { DB[:seek].order(:id, :nullable_1).seek(value: [3]) }
+    assert_error_message("passed the wrong number of values to #seek") { DB[:seek].order(:id, :nullable_1).seek(value: [3, 4, 5]) }
   end
 
   it "should raise an error if from_pk or after_pk are passed to a dataset without an associated model" do
-    assert_error_message("attempted a pk lookup on a dataset that doesn't have an associated model") { DB[:seek].order(:id, :nullable_1).seek(3, pk: true) }
+    assert_error_message("attempted a pk lookup on a dataset that doesn't have an associated model") { DB[:seek].order(:id, :nullable_1).seek(pk: 3) }
   end
 
   describe "when chained from a model" do
     it "should be able to determine from the schema what columns are not null" do
       assert_equal %(SELECT * FROM "seek" WHERE (("not_nullable_1", "not_nullable_2", "id") > (1, 2, 3)) ORDER BY "not_nullable_1", "not_nullable_2", "id" LIMIT 5),
-        SeekModel.order(:not_nullable_1, :not_nullable_2, :id).seek([1, 2, 3]).limit(5).sql
+        SeekModel.order(:not_nullable_1, :not_nullable_2, :id).seek(value: [1, 2, 3]).limit(5).sql
     end
 
     it "should raise an error when passed a pk for a record that doesn't exist in the dataset" do
-      assert_raises(Sequel::NoMatchingRow) { SeekModel.order(:id).seek(-45, pk: true) }
+      assert_raises(Sequel::NoMatchingRow) { SeekModel.order(:id).seek(pk: -45) }
     end
   end
 end

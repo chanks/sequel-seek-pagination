@@ -5,20 +5,20 @@ module Sequel
   module SeekPagination
     class Error < StandardError; end
 
-    def seek(values, include_exact_match: false, pk: false, not_null: nil)
+    def seek(value: nil, pk: nil, include_exact_match: false, not_null: nil)
       order = opts[:order]
       model = @model
 
-      if order.nil? || order.length.zero?
+      if !(value.nil? ^ pk.nil?)
+        raise Error, "must pass exactly one of :value and :pk to #seek"
+      elsif order.nil? || order.length.zero?
         raise Error, "cannot seek on a dataset with no order"
       elsif model.nil? && pk
         raise Error, "attempted a pk lookup on a dataset that doesn't have an associated model"
       end
 
-      values = Array(values)
-
       if pk
-        target_ds = where(model.qualified_primary_key_hash(values))
+        target_ds = where(model.qualified_primary_key_hash(pk))
 
         # Need to load the values to order from for that pk from the DB, so we
         # need to fetch the actual expressions being ordered by. Also,
@@ -33,8 +33,12 @@ module Sequel
         unless values = target_ds.get(gettable)
           raise NoMatchingRow.new(target_ds)
         end
-      elsif values.length != order.length
-        raise Error, "passed the wrong number of values to #seek"
+      else
+        values = Array(value)
+
+        if values.length != order.length
+          raise Error, "passed the wrong number of values to #seek"
+        end
       end
 
       if not_null.nil?
