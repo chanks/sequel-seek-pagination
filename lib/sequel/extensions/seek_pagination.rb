@@ -7,7 +7,7 @@ module Sequel
 
     def seek(value: nil, pk: nil, include_exact_match: false, not_null: nil)
       order = opts[:order]
-      model = @model
+      model = opts[:model]
 
       if !(value.nil? ^ pk.nil?)
         raise Error, "must pass exactly one of :value and :pk to #seek"

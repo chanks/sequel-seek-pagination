@@ -156,11 +156,11 @@ class SeekPaginationSpec < Minitest::Spec
   it "should work for order clauses of many types" do
     datasets = [
       DB[:seek].order(:id),
-      DB[:seek].order(:seek__id),
+      DB[:seek].order(Sequel.qualify(:seek, :id)),
       DB[:seek].order(Sequel.asc(:id)),
-      DB[:seek].order(Sequel.asc(:seek__id)),
+      DB[:seek].order(Sequel.asc(Sequel.qualify(:seek, :id))),
       DB[:seek].order(Sequel.desc(:id)).reverse_order,
-      DB[:seek].order(Sequel.desc(:seek__id)).reverse_order,
+      DB[:seek].order(Sequel.desc(Sequel.qualify(:seek, :id))).reverse_order,
     ]
 
     # With point to start from/after:
