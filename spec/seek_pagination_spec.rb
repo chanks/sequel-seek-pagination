@@ -217,6 +217,13 @@ class SeekPaginationSpec < Minitest::Spec
         assert_equal SeekModel.order(:id), ds
       end
 
+      it "should support nullifying the dataset" do
+        ds = SeekModel.order(:id).seek(pk: -45, missing_pk: :nullify)
+
+        assert_equal [], ds.all
+        assert_equal 0, ds.count
+      end
+
       it "should raise when an unsupported option is passed" do
         assert_error_message "passed an invalid argument for missing_pk: :nonexistent_option" do
           SeekModel.order(:id).seek(pk: -45, missing_pk: :nonexistent_option)

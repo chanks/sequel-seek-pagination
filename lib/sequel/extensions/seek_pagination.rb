@@ -41,6 +41,7 @@ module Sequel
           case missing_pk
           when :raise      then raise NoMatchingRow.new(target_ds)
           when :ignore     then return self
+          when :nullify    then return nullify
           when :return_nil then return nil
           else raise Error, "passed an invalid argument for missing_pk: #{missing_pk.inspect}"
           end
