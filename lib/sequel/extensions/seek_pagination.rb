@@ -5,7 +5,14 @@ module Sequel
   module SeekPagination
     class Error < StandardError; end
 
-    def seek(value: nil, pk: nil, include_exact_match: false, not_null: nil)
+    def seek(
+      value: nil,
+      pk: nil,
+      include_exact_match: false,
+      not_null: nil,
+      missing_pk: :raise
+    )
+
       order = opts[:order]
       model = opts[:model]
 
@@ -31,7 +38,12 @@ module Sequel
         end
 
         unless values = target_ds.get(gettable)
-          raise NoMatchingRow.new(target_ds)
+          case missing_pk
+          when :raise      then raise NoMatchingRow.new(target_ds)
+          when :ignore     then return self
+          when :return_nil then return nil
+          else raise Error, "passed an invalid argument for missing_pk: #{missing_pk.inspect}"
+          end
         end
       else
         values = Array(value)

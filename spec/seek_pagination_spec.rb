@@ -200,8 +200,28 @@ class SeekPaginationSpec < Minitest::Spec
         SeekModel.order(:not_nullable_1, :not_nullable_2, :id).seek(value: [1, 2, 3]).limit(5).sql
     end
 
-    it "should raise an error when passed a pk for a record that doesn't exist in the dataset" do
-      assert_raises(Sequel::NoMatchingRow) { SeekModel.order(:id).seek(pk: -45) }
+    describe "when passed a pk and no record is found" do
+      it "should default to raising an error" do
+        assert_raises(Sequel::NoMatchingRow) do
+          SeekModel.order(:id).seek(pk: -45)
+        end
+      end
+
+      it "should support returning nil" do
+        assert_nil SeekModel.order(:id).seek(pk: -45, missing_pk: :return_nil)
+      end
+
+      it "should support ignoring the condition" do
+        ds = SeekModel.order(:id).seek(pk: -45, missing_pk: :ignore)
+
+        assert_equal SeekModel.order(:id), ds
+      end
+
+      it "should raise when an unsupported option is passed" do
+        assert_error_message "passed an invalid argument for missing_pk: :nonexistent_option" do
+          SeekModel.order(:id).seek(pk: -45, missing_pk: :nonexistent_option)
+        end
+      end
     end
   end
 end
