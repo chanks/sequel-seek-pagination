@@ -200,6 +200,8 @@ class SeekPaginationSpec < Minitest::Spec
         SeekModel.order(:not_nullable_1, :not_nullable_2, :id).seek(value: [1, 2, 3]).limit(5).sql
     end
 
+    it "shouldn't be fooled by table-qualified orderings"
+
     describe "when passed a pk and no record is found" do
       it "should default to raising an error" do
         assert_raises(Sequel::NoMatchingRow) do
