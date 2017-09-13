@@ -60,8 +60,11 @@ module Sequel
         # If the dataset was chained off a model, use its stored schema
         # information to figure out what columns are not null.
         if model
+          table = model.table_name
+
           model.db_schema.each do |column, schema|
-            not_null << column if schema[:allow_null] == false
+            next if schema[:allow_null]
+            not_null << column << Sequel.qualify(table, column)
           end
         end
       end
