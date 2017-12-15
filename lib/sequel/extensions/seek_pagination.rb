@@ -25,21 +25,8 @@ module Sequel
       end
 
       if pk
-        target_ds = where(model.qualified_primary_key_hash(pk))
-
-        # Need to load the values to order from for that pk from the DB, so we
-        # need to fetch the actual expressions being ordered by. Also,
-        # Dataset#get won't like it if we pass it expressions that aren't
-        # simple columns, so we need to give it aliases for everything.
-        al = :a
-        gettable = order.map do |o|
-          expression = Sequel::SQL::OrderedExpression === o ? o.expression : o
-          Sequel.as(expression, (al = al.next))
-        end
-
-        unless values = target_ds.get(gettable)
+        unless values = get_order_values_for_pk(pk, raise_on_failure: missing_pk == :raise)
           case missing_pk
-          when :raise      then raise NoMatchingRow.new(target_ds)
           when :ignore     then return self
           when :nullify    then return nullify
           when :return_nil then return nil
@@ -74,6 +61,36 @@ module Sequel
         include_exact_match: include_exact_match,
         not_null: not_null
       ).apply(self)
+    end
+
+    def get_order_values_for_pk(pk, raise_on_failure: false)
+      order = opts[:order]
+      model = opts[:model]
+
+      al = :a
+      aliases = order.map { a = al; al = al.next; a }
+
+      ds =
+        cached_dataset(:_seek_pagination_get_order_values_ds) do
+          # Need to load the values to order from for that pk from the DB, so we
+          # need to fetch the actual expressions being ordered by. Also,
+          # Dataset#get won't like it if we pass it expressions that aren't
+          # simple columns, so we need to give it aliases for everything.
+          naked.limit(1).select(
+            *order.map.with_index { |o, i|
+              expression = Sequel::SQL::OrderedExpression === o ? o.expression : o
+              Sequel.as(expression, aliases[i])
+            }
+          )
+        end
+
+      condition = model.qualified_primary_key_hash(pk)
+
+      if result = ds.where_all(condition).first
+        result.values_at(*aliases)
+      elsif raise_on_failure
+        raise NoMatchingRow.new(ds.where(condition))
+      end
     end
 
     private
