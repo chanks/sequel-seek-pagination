@@ -5,12 +5,25 @@ module Sequel
   module SeekPagination
     class Error < StandardError; end
 
-    def seek(
+    def seek(missing_pk: :raise, **args)
+      if c = seek_conditions(raise_on_missing_pk: missing_pk == :raise, **args)
+        where(c)
+      else
+        case missing_pk
+        when :ignore     then self
+        when :nullify    then nullify
+        when :return_nil then nil
+        else raise Error, "passed an invalid argument for missing_pk: #{missing_pk.inspect}"
+        end
+      end
+    end
+
+    def seek_conditions(
       value: nil,
       pk: nil,
       include_exact_match: false,
       not_null: nil,
-      missing_pk: :raise
+      raise_on_missing_pk: false
     )
 
       order = opts[:order]
@@ -25,14 +38,7 @@ module Sequel
       end
 
       if pk
-        unless values = get_order_values_for_pk(pk, raise_on_failure: missing_pk == :raise)
-          case missing_pk
-          when :ignore     then return self
-          when :nullify    then return nullify
-          when :return_nil then return nil
-          else raise Error, "passed an invalid argument for missing_pk: #{missing_pk.inspect}"
-          end
-        end
+        return unless values = get_order_values_for_pk(pk, raise_on_failure: raise_on_missing_pk)
       else
         values = Array(value)
 
@@ -60,7 +66,7 @@ module Sequel
         order.zip(values),
         include_exact_match: include_exact_match,
         not_null: not_null
-      ).apply(self)
+      ).build_conditions
     end
 
     def get_order_values_for_pk(pk, raise_on_failure: false)
@@ -104,46 +110,43 @@ module Sequel
         @orders = order_values.map { |order, value| OrderedColumn.new(self, order, value) }
       end
 
-      def apply(dataset)
+      def build_conditions
         length = orders.length
 
-        conditions =
-          # Handle the common case where we can do a simpler (and faster)
-          # WHERE (non_nullable_1, non_nullable_2) > (1, 2) clause.
-          if length > 1 && orders.all?(&:not_null) && has_uniform_order_direction?
-            Sequel.virtual_row do |o|
-              o.__send__(
-                orders.first.inequality_method(include_exact_match),
-                orders.map(&:name),
-                orders.map(&:value)
-              )
-            end
-          else
-            Sequel.&(
-              *length.times.map { |i|
-                allow_equal = include_exact_match || i != (length - 1)
-                conditions = orders[0..i]
-
-                if i.zero?
-                  conditions[0].inequality_condition(allow_equal: allow_equal)
-                else
-                  c = conditions[-2]
-
-                  list = if filter = conditions[-1].inequality_condition(allow_equal: allow_equal)
-                           [Sequel.&(c.eq_filter, filter)]
-                         else
-                           [c.eq_filter]
-                         end
-
-                  list += conditions[0..-2].map { |c| c.inequality_condition(allow_equal: false) }
-
-                  Sequel.|(*list.compact)
-                end
-              }.compact
+        # Handle the common case where we can do a simpler (and faster)
+        # WHERE (non_nullable_1, non_nullable_2) > (1, 2) clause.
+        if length > 1 && orders.all?(&:not_null) && has_uniform_order_direction?
+          Sequel.virtual_row do |o|
+            o.__send__(
+              orders.first.inequality_method(include_exact_match),
+              orders.map(&:name),
+              orders.map(&:value)
             )
           end
+        else
+          Sequel.&(
+            *length.times.map { |i|
+              allow_equal = include_exact_match || i != (length - 1)
+              conditions = orders[0..i]
 
-        dataset.where(conditions)
+              if i.zero?
+                conditions[0].inequality_condition(allow_equal: allow_equal)
+              else
+                c = conditions[-2]
+
+                list = if filter = conditions[-1].inequality_condition(allow_equal: allow_equal)
+                         [Sequel.&(c.eq_filter, filter)]
+                       else
+                         [c.eq_filter]
+                       end
+
+                list += conditions[0..-2].map { |c| c.inequality_condition(allow_equal: false) }
+
+                Sequel.|(*list.compact)
+              end
+            }.compact
+          )
+        end
       end
 
       private
