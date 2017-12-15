@@ -33,18 +33,19 @@ module Sequel
         raise Error, "must pass exactly one of :value and :pk to #seek"
       elsif order.nil? || order.length.zero?
         raise Error, "cannot call #seek on a dataset with no order"
-      elsif model.nil? && pk
-        raise Error, "attempted a primary key lookup on a dataset that doesn't have an associated model"
       end
 
-      if pk
-        return unless values = get_order_values_for_pk(pk, raise_on_failure: raise_on_missing_pk)
-      else
-        values = Array(value)
-
-        if values.length != order.length
-          raise Error, "passed the wrong number of values to #seek"
+      values =
+        if pk
+          get_order_values_for_pk(pk, raise_on_failure: raise_on_missing_pk)
+        else
+          Array(value)
         end
+
+      return unless values
+
+      if values.length != order.length
+        raise Error, "passed the wrong number of values to #seek"
       end
 
       if not_null.nil?
@@ -71,10 +72,13 @@ module Sequel
 
     def get_order_values_for_pk(pk, raise_on_failure: false)
       order = opts[:order]
-      model = opts[:model]
 
-      al = :a
-      aliases = order.map { a = al; al = al.next; a }
+      unless model = opts[:model]
+        raise Error, "attempted a primary key lookup on a dataset that doesn't have an associated model"
+      end
+
+      al = nil
+      aliases = order.map { al = al ? al.next : :a }
 
       ds =
         cached_dataset(:_seek_pagination_get_order_values_ds) do
