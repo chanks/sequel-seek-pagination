@@ -1,4 +1,5 @@
 require 'spec_helper'
+require 'digest/md5'
 
 class SeekPaginationSpec < Minitest::Spec
   SEEK_COUNT = DB[:seek].count
@@ -14,12 +15,13 @@ class SeekPaginationSpec < Minitest::Spec
 
   class << self
     def it_should_seek_properly(ordering)
-      columns = ordering.map do |order|
-                  case order
-                  when Sequel::SQL::OrderedExpression then order.expression
-                  else order
-                  end
-                end
+      columns =
+        ordering.map do |order|
+          case order
+          when Sequel::SQL::OrderedExpression then order.expression
+          else order
+          end
+        end
 
       [:plain, :model].each do |dataset_type|
         describe "for a #{dataset_type} dataset" do
@@ -72,6 +74,27 @@ class SeekPaginationSpec < Minitest::Spec
                                    dataset.seek(pk: id)
             end
           end
+
+          it "should be preparable" do
+            ds = dataset
+
+            offset = rand(SEEK_COUNT)
+            values = dataset.offset(offset).get(gettable)
+
+            ps_name = "ps_#{Digest::MD5.hexdigest(rand.to_s)}".to_sym
+
+            binding.pry unless $stop
+            0
+
+            ps1 = dataset.seek(bind_arguments: true, include_exact_match: true, not_null: [:id, :non_nullable_1, :non_nullable_2]).prepare(:select, :"#{ps_name}_true")
+            assert_equal dataset.offset(offset).all,
+                         ps1.call(Hash[values.map.with_index{|v, i| [:"seek_paginate_#{i}", v]}])
+
+
+            ps2 = dataset.seek(bind_arguments: true, include_exact_match: true, not_null: [:id, :non_nullable_1, :non_nullable_2]).prepare(:select, :"#{ps_name}_false")
+            assert_equal dataset.offset(offset).all,
+                         ps2.call(Hash[values.map.with_index{|v, i| [:"seek_paginate_#{i}", v]}])
+          end
         end
       end
     end
@@ -83,75 +106,75 @@ class SeekPaginationSpec < Minitest::Spec
     end
   end
 
-  describe "for ordering by two not-null columns in any order" do
-    [Sequel.asc(:not_nullable_1), Sequel.desc(:not_nullable_1)].each do |o1|
-      [Sequel.asc(:id), Sequel.desc(:id)].each do |o2|
-        it_should_seek_properly [o1, o2]
-      end
-    end
-  end
+  # describe "for ordering by two not-null columns in any order" do
+  #   [Sequel.asc(:not_nullable_1), Sequel.desc(:not_nullable_1)].each do |o1|
+  #     [Sequel.asc(:id), Sequel.desc(:id)].each do |o2|
+  #       it_should_seek_properly [o1, o2]
+  #     end
+  #   end
+  # end
 
-  describe "for ordering by three not-null columns in any order" do
-    [Sequel.asc(:not_nullable_1), Sequel.desc(:not_nullable_1)].each do |o1|
-      [Sequel.asc(:not_nullable_2), Sequel.desc(:not_nullable_2)].each do |o2|
-        [Sequel.asc(:id), Sequel.desc(:id)].each do |o3|
-          it_should_seek_properly [o1, o2, o3]
-        end
-      end
-    end
-  end
+  # describe "for ordering by three not-null columns in any order" do
+  #   [Sequel.asc(:not_nullable_1), Sequel.desc(:not_nullable_1)].each do |o1|
+  #     [Sequel.asc(:not_nullable_2), Sequel.desc(:not_nullable_2)].each do |o2|
+  #       [Sequel.asc(:id), Sequel.desc(:id)].each do |o3|
+  #         it_should_seek_properly [o1, o2, o3]
+  #       end
+  #     end
+  #   end
+  # end
 
-  describe "for ordering by a nullable column" do
-    # We still tack on :id because the ordering needs to be unique.
-    [Sequel.asc(:nullable_1), Sequel.desc(:nullable_1), Sequel.asc(:nullable_1, nulls: :first), Sequel.desc(:nullable_1, nulls: :last)].each do |o1|
-      [Sequel.asc(:id), Sequel.desc(:id)].each do |o2|
-        it_should_seek_properly [o1, o2]
-      end
-    end
-  end
+  # describe "for ordering by a nullable column" do
+  #   # We still tack on :id because the ordering needs to be unique.
+  #   [Sequel.asc(:nullable_1), Sequel.desc(:nullable_1), Sequel.asc(:nullable_1, nulls: :first), Sequel.desc(:nullable_1, nulls: :last)].each do |o1|
+  #     [Sequel.asc(:id), Sequel.desc(:id)].each do |o2|
+  #       it_should_seek_properly [o1, o2]
+  #     end
+  #   end
+  # end
 
-  describe "for ordering by multiple nullable columns" do
-    # We still tack on :id because the ordering needs to be unique.
-    [Sequel.asc(:nullable_1), Sequel.desc(:nullable_1), Sequel.asc(:nullable_1, nulls: :first), Sequel.desc(:nullable_1, nulls: :last)].each do |o1|
-      [Sequel.asc(:nullable_2), Sequel.desc(:nullable_2), Sequel.asc(:nullable_2, nulls: :first), Sequel.desc(:nullable_2, nulls: :last)].each do |o2|
-        [Sequel.asc(:id), Sequel.desc(:id)].each do |o3|
-          it_should_seek_properly [o1, o2, o3]
-        end
-      end
-    end
-  end
+  # describe "for ordering by multiple nullable columns" do
+  #   # We still tack on :id because the ordering needs to be unique.
+  #   [Sequel.asc(:nullable_1), Sequel.desc(:nullable_1), Sequel.asc(:nullable_1, nulls: :first), Sequel.desc(:nullable_1, nulls: :last)].each do |o1|
+  #     [Sequel.asc(:nullable_2), Sequel.desc(:nullable_2), Sequel.asc(:nullable_2, nulls: :first), Sequel.desc(:nullable_2, nulls: :last)].each do |o2|
+  #       [Sequel.asc(:id), Sequel.desc(:id)].each do |o3|
+  #         it_should_seek_properly [o1, o2, o3]
+  #       end
+  #     end
+  #   end
+  # end
 
-  describe "for ordering by a mix of nullable and not-nullable columns" do
-    20.times do
-      columns = [
-        [:not_nullable_1, Sequel.asc(:not_nullable_1), Sequel.desc(:not_nullable_1)],
-        [:not_nullable_2, Sequel.asc(:not_nullable_2), Sequel.desc(:not_nullable_2)],
-        [:nullable_1, Sequel.asc(:nullable_1), Sequel.desc(:nullable_1), Sequel.asc(:nullable_1, nulls: :first), Sequel.desc(:nullable_1, nulls: :last)],
-        [:nullable_2, Sequel.asc(:nullable_2), Sequel.desc(:nullable_2), Sequel.asc(:nullable_2, nulls: :first), Sequel.desc(:nullable_2, nulls: :last)],
-      ]
+  # describe "for ordering by a mix of nullable and not-nullable columns" do
+  #   20.times do
+  #     columns = [
+  #       [:not_nullable_1, Sequel.asc(:not_nullable_1), Sequel.desc(:not_nullable_1)],
+  #       [:not_nullable_2, Sequel.asc(:not_nullable_2), Sequel.desc(:not_nullable_2)],
+  #       [:nullable_1, Sequel.asc(:nullable_1), Sequel.desc(:nullable_1), Sequel.asc(:nullable_1, nulls: :first), Sequel.desc(:nullable_1, nulls: :last)],
+  #       [:nullable_2, Sequel.asc(:nullable_2), Sequel.desc(:nullable_2), Sequel.asc(:nullable_2, nulls: :first), Sequel.desc(:nullable_2, nulls: :last)],
+  #     ]
 
-      testing_columns = columns.sample(rand(columns.count) + 1).map(&:sample)
-      testing_columns << [:id, Sequel.asc(:id), Sequel.desc(:id)].sample
+  #     testing_columns = columns.sample(rand(columns.count) + 1).map(&:sample)
+  #     testing_columns << [:id, Sequel.asc(:id), Sequel.desc(:id)].sample
 
-      it_should_seek_properly(testing_columns)
-    end
-  end
+  #     it_should_seek_properly(testing_columns)
+  #   end
+  # end
 
-  describe "for ordering by a mix of expressions and columns" do
-    20.times do
-      columns = [
-        [:not_nullable_1, Sequel.asc(:not_nullable_1), Sequel.desc(:not_nullable_1), Sequel.expr(:not_nullable_1).sql_number % 10, Sequel.asc(Sequel.expr(:not_nullable_1).sql_number % 10), Sequel.desc(Sequel.expr(:not_nullable_1).sql_number % 10)],
-        [:not_nullable_2, Sequel.asc(:not_nullable_2), Sequel.desc(:not_nullable_2), Sequel.expr(:not_nullable_2).sql_number % 10, Sequel.asc(Sequel.expr(:not_nullable_2).sql_number % 10), Sequel.desc(Sequel.expr(:not_nullable_2).sql_number % 10)],
-        [:nullable_1, Sequel.asc(:nullable_1), Sequel.desc(:nullable_1), Sequel.asc(:nullable_1, nulls: :first), Sequel.desc(:nullable_1, nulls: :last), Sequel.expr(:nullable_1).sql_number % 10, Sequel.asc(Sequel.expr(:nullable_1).sql_number % 10), (Sequel.expr(:nullable_1).sql_number % 10).desc, Sequel.asc(Sequel.expr(:nullable_1).sql_number % 10, nulls: :first), Sequel.desc(Sequel.expr(:nullable_1).sql_number % 10, nulls: :last)],
-        [:nullable_2, Sequel.asc(:nullable_2), Sequel.desc(:nullable_2), Sequel.asc(:nullable_2, nulls: :first), Sequel.desc(:nullable_2, nulls: :last), Sequel.expr(:nullable_2).sql_number % 10, Sequel.asc(Sequel.expr(:nullable_2).sql_number % 10), (Sequel.expr(:nullable_2).sql_number % 10).desc, Sequel.asc(Sequel.expr(:nullable_2).sql_number % 10, nulls: :first), Sequel.desc(Sequel.expr(:nullable_2).sql_number % 10, nulls: :last)],
-      ]
+  # describe "for ordering by a mix of expressions and columns" do
+  #   20.times do
+  #     columns = [
+  #       [:not_nullable_1, Sequel.asc(:not_nullable_1), Sequel.desc(:not_nullable_1), Sequel.expr(:not_nullable_1).sql_number % 10, Sequel.asc(Sequel.expr(:not_nullable_1).sql_number % 10), Sequel.desc(Sequel.expr(:not_nullable_1).sql_number % 10)],
+  #       [:not_nullable_2, Sequel.asc(:not_nullable_2), Sequel.desc(:not_nullable_2), Sequel.expr(:not_nullable_2).sql_number % 10, Sequel.asc(Sequel.expr(:not_nullable_2).sql_number % 10), Sequel.desc(Sequel.expr(:not_nullable_2).sql_number % 10)],
+  #       [:nullable_1, Sequel.asc(:nullable_1), Sequel.desc(:nullable_1), Sequel.asc(:nullable_1, nulls: :first), Sequel.desc(:nullable_1, nulls: :last), Sequel.expr(:nullable_1).sql_number % 10, Sequel.asc(Sequel.expr(:nullable_1).sql_number % 10), (Sequel.expr(:nullable_1).sql_number % 10).desc, Sequel.asc(Sequel.expr(:nullable_1).sql_number % 10, nulls: :first), Sequel.desc(Sequel.expr(:nullable_1).sql_number % 10, nulls: :last)],
+  #       [:nullable_2, Sequel.asc(:nullable_2), Sequel.desc(:nullable_2), Sequel.asc(:nullable_2, nulls: :first), Sequel.desc(:nullable_2, nulls: :last), Sequel.expr(:nullable_2).sql_number % 10, Sequel.asc(Sequel.expr(:nullable_2).sql_number % 10), (Sequel.expr(:nullable_2).sql_number % 10).desc, Sequel.asc(Sequel.expr(:nullable_2).sql_number % 10, nulls: :first), Sequel.desc(Sequel.expr(:nullable_2).sql_number % 10, nulls: :last)],
+  #     ]
 
-      testing_columns = columns.sample(rand(columns.count) + 1).map(&:sample)
-      testing_columns << [:id, Sequel.asc(:id), Sequel.desc(:id)].sample
+  #     testing_columns = columns.sample(rand(columns.count) + 1).map(&:sample)
+  #     testing_columns << [:id, Sequel.asc(:id), Sequel.desc(:id)].sample
 
-      it_should_seek_properly(testing_columns)
-    end
-  end
+  #     it_should_seek_properly(testing_columns)
+  #   end
+  # end
 
   it "should work for order clauses of many types" do
     datasets = [

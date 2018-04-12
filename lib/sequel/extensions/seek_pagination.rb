@@ -21,6 +21,7 @@ module Sequel
     def seek_conditions(
       value: nil,
       pk: nil,
+      bind_arguments: nil,
       include_exact_match: false,
       not_null: nil,
       raise_on_missing_pk: false
@@ -28,6 +29,19 @@ module Sequel
 
       order = opts[:order]
       model = opts[:model]
+
+      if bind_arguments
+        return(
+          cached_dataset :"_seek_pagination_conditions_#{include_exact_match}" do
+            seek_conditions(
+              value: order.map.with_index { |_,i| :"$seek_paginate_#{i}" },
+              include_exact_match: include_exact_match,
+              not_null: not_null,
+              raise_on_missing_pk: raise_on_missing_pk,
+            )
+          end
+        )
+      end
 
       if !(value.nil? ^ pk.nil?)
         raise Error, "must pass exactly one of :value and :pk to #seek"
